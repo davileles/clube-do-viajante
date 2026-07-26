@@ -1465,22 +1465,9 @@ async function aprovarAlerta(id) {
       } else {
         fb.style.color='#22c55e'; fb.textContent='✓ Enviado!';
       }
-      // Registra passagem no histórico (se for oferta de emissão)
-      var alertaObj = (typeof alertasData !== 'undefined' ? alertasData : []).find(function(o){return String(o.id)===String(id);}) || {};
-      var de = alertaObj.dadosExtraidos || {};
-      if (de.origem && de.destino && de.programa) {
-        registrarPassagem({
-          origem:      de.origem,
-          destino:     de.destino,
-          cia:         de.cia || '',
-          programa:    de.programa,
-          pontos:      de.pontos || 0,
-          cabine:      de.cabine || de.classe || '',
-          datas_ida:   de.datasIda || de.datas_ida || '',
-          datas_volta: de.datasVolta || de.datas_volta || '',
-          fonte:       'alerta'
-        });
-      }
+      // NÃO registra passagem aqui: o baileys-server grava em passagens.json
+      // no worker de envio, quando a mensagem sai de fato no grupo (inclusive
+      // para agendamentos). Registrar aqui duplicava o histórico.
       setTimeout(carregarAlertas, 1500);
     } else {
       fb.style.color='#ff585e'; fb.textContent='Erro: '+(d.erro||'falha');
