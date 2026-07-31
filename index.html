@@ -548,6 +548,8 @@ PRAZO: use o prazo de ENCERRAMENTO da campanha. Procure ativamente por: "válido
 LINK: use sempre o link oficial da oferta (sem parâmetros UTM). Procure hrefs próximos a "clique aqui", "acesse", "confira", "participar". NUNCA use link do blog/artigo.
 Fallbacks por programa: Livelo→https://www.livelo.com.br, Smiles→https://www.smiles.com.br/home, LATAM Pass→https://www.latamairlines.com/br/pt, Azul Fidelidade→https://www.voeazul.com.br/br/pt/home, Azul Pelo Mundo→https://www.voeazul.com.br/br/pt/home, Esfera→https://www.esfera.com.vc, Iberia→https://www.iberia.com, TAP→https://www.flytap.com, AAdvantage→https://www.aa.com.br.
 
+COMUNICADO OU AVISO SEM OFERTA COMERCIAL: se o conteúdo for uma novidade, comunicado ou aviso (sem loja, cupom, prazo ou pontuação específica), ainda assim preencha "titulo" com uma chamada curta e objetiva, "resumo" com 2 a 3 frases e "categoria":"geral", deixando os demais campos vazios. NUNCA retorne todos os campos vazios quando houver conteúdo legível.
+
 Responda SOMENTE com este JSON (todos os campos sempre presentes, mesmo que vazios):
 {"titulo":"","resumo":"2 a 3 frases resumindo a oportunidade","programa":"nome do(s) programa(s)","bonus":"valor do bônus de forma objetiva","descricao":"","prazo":"DD/MM/AAAA ou vazio","loja":"","cupom":"","link":"","importante":"","milheiro":"","tetoTransferencia":"","categoria":"transferencia|compra|compra_bonificada|clube|cartao|geral","restricoes":["condição 1","condição 2"]}`;
 }
@@ -605,6 +607,61 @@ async function chamarIA(messages, useSearch) {
   return parsed;
 }
 
+// ══ APLICAR DADOS DA IA NOS CAMPOS DE OFERTA ══
+var OFERTA_FIELD_IDS = ['o-titulo','o-corpo','o-prazo','o-loja','o-cupom','o-importante','o-link','o-programa','o-bonus','o-milheiro','o-teto','o-restricoes','o-categoria'];
+
+function parsePrazoOferta(prazoStr) {
+  if (!prazoStr || !String(prazoStr).trim()) return '';
+  var s = String(prazoStr).trim();
+  var anoAtual = new Date().getFullYear();
+  var dia='', mes='', ano='';
+  var m3 = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m3) { dia=m3[1]; mes=m3[2]; ano=m3[3]; }
+  else { var m2 = s.match(/(\d{1,2})\/(\d{1,2})/); if (m2) { dia=m2[1]; mes=m2[2]; ano=anoAtual; } }
+  if (!dia) {
+    var MESES = {jan:1,fev:2,'mar':3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12,janeiro:1,fevereiro:2,'março':3,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
+    var mt = s.toLowerCase().match(/(\d{1,2})\s+de\s+([a-zçã]+)(?:\s+de\s+(\d{4}))?/);
+    if (mt && MESES[mt[2]]) { dia=mt[1]; mes=MESES[mt[2]]; ano=mt[3]||anoAtual; }
+  }
+  if (!dia || !mes) return '';
+  return ano+'-'+String(mes).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+}
+
+// Retorna a quantidade de campos efetivamente extraidos pela IA (categoria e link
+// de fallback nao contam). Se nada foi extraido, NAO limpa nem altera o formulario.
+function aplicarOfertaIA(obj, linkFallback) {
+  function norm(str){ if(!str) return str; return String(str).replace(/\bHTC\b/gi,'Hoteis.com').replace(/\bHotel Urbano\b/gi,'Hoteis.com'); }
+  obj.titulo=norm(obj.titulo); obj.resumo=norm(obj.resumo); obj.descricao=norm(obj.descricao);
+  obj.loja=norm(obj.loja); obj.cupom=norm(obj.cupom); obj.importante=norm(obj.importante); obj.link=norm(obj.link);
+
+  var vals = {};
+  if (obj.titulo)     vals['o-titulo']=obj.titulo;
+  if (obj.resumo && obj.descricao) vals['o-corpo']=obj.resumo+'\n\n'+obj.descricao;
+  else if (obj.resumo)    vals['o-corpo']=obj.resumo;
+  else if (obj.descricao) vals['o-corpo']=obj.descricao;
+  if (obj.loja)       vals['o-loja']=obj.loja;
+  if (obj.cupom)      vals['o-cupom']=obj.cupom;
+  if (obj.importante) vals['o-importante']=obj.importante;
+  if (obj.link)       vals['o-link']=obj.link;
+  if (obj.programa)   vals['o-programa']=obj.programa;
+  if (obj.bonus)      vals['o-bonus']=obj.bonus;
+  if (obj.milheiro)   vals['o-milheiro']=obj.milheiro;
+  if (obj.tetoTransferencia) vals['o-teto']=obj.tetoTransferencia;
+  if (obj.restricoes && Array.isArray(obj.restricoes) && obj.restricoes.length) vals['o-restricoes']=obj.restricoes.join('\n');
+  var prazoFmt = parsePrazoOferta(obj.prazo);
+  if (prazoFmt) vals['o-prazo']=prazoFmt;
+
+  var preenchidos = Object.keys(vals).length;
+  if (!preenchidos) { console.warn('[IA] resposta sem dados aproveitaveis:', obj); return 0; }
+
+  // So limpa o formulario quando ha algo real para escrever no lugar
+  OFERTA_FIELD_IDS.forEach(function(id){ var el=document.getElementById(id); if(el) el.value = id==='o-categoria' ? 'geral' : ''; });
+  Object.keys(vals).forEach(function(id){ var el=document.getElementById(id); if(el) el.value=vals[id]; });
+  if (obj.categoria) { var cEl=document.getElementById('o-categoria'); if(cEl) cEl.value=obj.categoria; }
+  if (!vals['o-link'] && linkFallback) { var lEl=document.getElementById('o-link'); if(lEl) lEl.value=linkFallback; }
+  return preenchidos;
+}
+
 // ══ ANALISAR OFERTA ══
 async function analisarOferta() {
   var okEl = document.getElementById('url-ok');
@@ -652,43 +709,16 @@ async function analisarOferta() {
         var useSearchPdf = false;
         try {
           var obj = await chamarIA(messages, useSearchPdf);
-          function normalizarParceiros2(str) {
-            if (!str) return str;
-            return str.replace(/\bHTC\b/gi, 'Hoteis.com').replace(/\bHotel Urbano\b/gi, 'Hoteis.com');
+          var nPdf = aplicarOfertaIA(obj, url);
+          if (!nPdf) {
+            okEl.style.color='#ff585e';
+            okEl.textContent='⚠️ A IA não extraiu nenhum dado desse PDF — preencha manualmente.';
+          } else {
+            gerarOferta();
+            okEl.style.color='#4ade80';
+            okEl.textContent='✓ PDF analisado — '+nPdf+' campo(s) preenchido(s).';
+            setTimeout(function(){okEl.textContent='';},5000);
           }
-          obj.titulo=normalizarParceiros2(obj.titulo); obj.descricao=normalizarParceiros2(obj.descricao);
-          obj.loja=normalizarParceiros2(obj.loja); obj.cupom=normalizarParceiros2(obj.cupom);
-          obj.importante=normalizarParceiros2(obj.importante); obj.link=normalizarParceiros2(obj.link);
-          ['o-titulo','o-corpo','o-prazo','o-loja','o-cupom','o-importante','o-link','o-programa','o-bonus','o-milheiro','o-teto','o-restricoes','o-categoria'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=id==='o-categoria'?'geral':''; });
-          if (obj.titulo)     document.getElementById('o-titulo').value=obj.titulo;
-          if (obj.resumo && obj.descricao) { document.getElementById('o-corpo').value = obj.resumo + '\n\n' + obj.descricao; }
-          else if (obj.resumo) { document.getElementById('o-corpo').value = obj.resumo; }
-          else if (obj.descricao) { document.getElementById('o-corpo').value = obj.descricao; }
-          if (obj.loja)       document.getElementById('o-loja').value=obj.loja;
-          if (obj.cupom)      document.getElementById('o-cupom').value=obj.cupom;
-          if (obj.importante) document.getElementById('o-importante').value=obj.importante;
-          if (obj.link)       document.getElementById('o-link').value=obj.link;
-          else                document.getElementById('o-link').value=url;
-          if (obj.programa)   document.getElementById('o-programa').value=obj.programa;
-          if (obj.bonus)      document.getElementById('o-bonus').value=obj.bonus;
-          if (obj.milheiro)   document.getElementById('o-milheiro').value=obj.milheiro;
-          if (obj.tetoTransferencia) document.getElementById('o-teto').value=obj.tetoTransferencia;
-          if (obj.categoria)  { var cEl2=document.getElementById('o-categoria'); if(cEl2) cEl2.value=obj.categoria; }
-          if (obj.restricoes && Array.isArray(obj.restricoes) && obj.restricoes.length) {
-            document.getElementById('o-restricoes').value=obj.restricoes.join('\n');
-          }
-          if (obj.prazo && obj.prazo.trim()) {
-            var prazoStr2 = obj.prazo.trim();
-            var anoAtual2 = new Date().getFullYear();
-            var dia2='', mes2='', ano2='';
-            var m3b = prazoStr2.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-            if (m3b) { dia2=m3b[1]; mes2=m3b[2]; ano2=m3b[3]; }
-            else { var m2b = prazoStr2.match(/(\d{1,2})\/(\d{1,2})/); if (m2b) { dia2=m2b[1]; mes2=m2b[2]; ano2=anoAtual2; } }
-            if (dia2 && mes2) { document.getElementById('o-prazo').value = ano2+'-'+String(mes2).padStart(2,'0')+'-'+String(dia2).padStart(2,'0'); }
-          }
-          gerarOferta();
-          okEl.style.color='#4ade80'; okEl.textContent='✓ PDF analisado com sucesso!';
-          setTimeout(function(){okEl.textContent='';},5000);
         } catch(eAi) {
           okEl.style.color='#ff585e'; okEl.textContent='Erro na IA: '+eAi.message;
         }
@@ -805,60 +835,15 @@ async function analisarOferta() {
   var useSearch = currentMode === 'link';
   try {
     var obj = await chamarIA(messages, useSearch);
-    function normalizarParceiros(str) {
-      if (!str) return str;
-      return str.replace(/\bHTC\b/gi, 'Hoteis.com').replace(/\bHotel Urbano\b/gi, 'Hoteis.com');
+    var linkFallback = currentMode==='link' ? document.getElementById('url-input').value.trim() : '';
+    var nCampos = aplicarOfertaIA(obj, linkFallback);
+    if (!nCampos) {
+      okEl.style.color='#ff585e';
+      okEl.textContent='⚠️ A IA não extraiu nenhum dado desse conteúdo — preencha manualmente.';
+    } else {
+      okEl.style.color='#4ade80';
+      okEl.textContent='✓ '+nCampos+' campo(s) preenchido(s). Revise antes de gerar.';
     }
-    obj.titulo=normalizarParceiros(obj.titulo); obj.descricao=normalizarParceiros(obj.descricao);
-    obj.loja=normalizarParceiros(obj.loja); obj.cupom=normalizarParceiros(obj.cupom);
-    obj.importante=normalizarParceiros(obj.importante); obj.link=normalizarParceiros(obj.link);
-    ['o-titulo','o-corpo','o-prazo','o-loja','o-cupom','o-importante','o-link','o-programa','o-bonus','o-milheiro','o-teto','o-restricoes','o-categoria'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=id==='o-categoria'?'geral':''; });
-    if (obj.titulo)     document.getElementById('o-titulo').value=obj.titulo;
-    // Se houver resumo E descricao (caso de múltiplos parceiros), concatena os dois
-    if (obj.resumo && obj.descricao) {
-      document.getElementById('o-corpo').value = obj.resumo + '\n\n' + obj.descricao;
-    } else if (obj.resumo) {
-      document.getElementById('o-corpo').value = obj.resumo;
-    } else if (obj.descricao) {
-      document.getElementById('o-corpo').value = obj.descricao;
-    }
-    if (obj.loja)       document.getElementById('o-loja').value=obj.loja;
-    if (obj.cupom)      document.getElementById('o-cupom').value=obj.cupom;
-    if (obj.importante) document.getElementById('o-importante').value=obj.importante;
-    if (obj.link)       document.getElementById('o-link').value=obj.link;
-    if (obj.programa)   document.getElementById('o-programa').value=obj.programa;
-    if (obj.bonus)      document.getElementById('o-bonus').value=obj.bonus;
-    if (obj.milheiro)   document.getElementById('o-milheiro').value=obj.milheiro;
-    if (obj.tetoTransferencia) document.getElementById('o-teto').value=obj.tetoTransferencia;
-    if (obj.categoria)  { var cEl=document.getElementById('o-categoria'); if(cEl) cEl.value=obj.categoria; }
-    if (obj.restricoes && Array.isArray(obj.restricoes) && obj.restricoes.length) {
-      document.getElementById('o-restricoes').value=obj.restricoes.join('\n');
-    }
-    if (!obj.link && currentMode==='link') document.getElementById('o-link').value=document.getElementById('url-input').value.trim();
-    if (obj.prazo && obj.prazo.trim()) {
-      var prazoStr = obj.prazo.trim();
-      var anoAtual = new Date().getFullYear();
-      var dia='', mes='', ano='';
-      // Formato DD/MM/AAAA
-      var m3 = prazoStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (m3) { dia=m3[1]; mes=m3[2]; ano=m3[3]; }
-      // Formato DD/MM (sem ano)
-      else {
-        var m2 = prazoStr.match(/(\d{1,2})\/(\d{1,2})/);
-        if (m2) { dia=m2[1]; mes=m2[2]; ano=anoAtual; }
-      }
-      // Formato textual: "5 de julho de 2026", "05/jul", etc.
-      if (!dia) {
-        var MESES = {jan:1,fev:2,'mar':3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12,janeiro:1,fevereiro:2,'março':3,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
-        var mt = prazoStr.toLowerCase().match(/(\d{1,2})\s+de\s+([a-zçã]+)(?:\s+de\s+(\d{4}))?/);
-        if (mt && MESES[mt[2]]) { dia=mt[1]; mes=MESES[mt[2]]; ano=mt[3]||anoAtual; }
-      }
-      if (dia && mes) {
-        var d = String(dia).padStart(2,'0'), mm = String(mes).padStart(2,'0');
-        document.getElementById('o-prazo').value = ano+'-'+mm+'-'+d;
-      }
-    }
-    okEl.style.color='#4ade80'; okEl.textContent='✓ Campos preenchidos! Revise antes de gerar.';
   } catch(e) {
     okEl.style.color='#ff585e';
     var errmsg = e.message || String(e);
