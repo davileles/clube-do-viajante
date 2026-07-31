@@ -367,21 +367,30 @@ var PROGRAMAS_CPM = {
   'Executive Club':58,'TAP':43,'AAdvantage':100,'SUMA':80,
   'Flying Club':50,'Finnair Plus':58,'Aeroplan':50
 };
-var PROGRAMAS_LINK = {
-  'Smiles':'https://www.smiles.com.br/home',
-  'Azul Fidelidade':'https://www.voeazul.com.br/br/pt/home',
-  'Azul pelo Mundo':'https://azulpelomundo.voeazul.com.br',
-  'LATAM Pass':'https://www.latamairlines.com/br/pt',
-  'Iberia Plus':'https://www.iberia.com/',
-  'Privilege Club':'https://www.qatarairways.com/',
-  'Executive Club':'https://www.britishairways.com/',
-  'TAP':'https://www.flytap.com/',
-  'AAdvantage':'https://www.aa.com.br/',
-  'SUMA':'https://www.aireuropa.com/en/flights/home',
-  'Flying Club':'https://www.virginatlantic.com/',
-  'Finnair Plus':'https://www.finnair.com/br/gb/finnair-plus',
-  'Aeroplan':'https://www.aircanada.com/home/ca/en/aco/flights'
+// Links mascarados do Clube do Viajante. O destino real (com os parametros de
+// afiliado) vive em painel-cdv/links.json e e resolvido pelo endpoint /ir do
+// proxy Railway. Para trocar um destino NAO mexa aqui: edite links.json.
+var IR_BASE = 'https://ir.clubedoviajante.com.br/';
+var PROGRAMAS_SLUG = {
+  'Smiles':'smiles',
+  'Azul Fidelidade':'azul',
+  'Azul pelo Mundo':'azul-mundo',
+  'LATAM Pass':'latam',
+  'Iberia Plus':'iberia',
+  'Privilege Club':'qatar',
+  'Executive Club':'british',
+  'TAP':'tap',
+  'AAdvantage':'aadvantage',
+  'SUMA':'suma',
+  'Flying Club':'virgin',
+  'Finnair Plus':'finnair',
+  'Aeroplan':'aeroplan'
 };
+function linkPrograma(programa, origem) {
+  var slug = PROGRAMAS_SLUG[programa];
+  if (!slug) return '';
+  return IR_BASE + slug + (origem ? '?o=' + encodeURIComponent(origem) : '');
+}
 
 // Listas fixas (dropdown) para o histórico de transferências bonificadas — evita erro de grafia
 // que quebraria o match de "chave" no historico-transferencias.json
@@ -1188,7 +1197,7 @@ function gerarMensagemEmissao(idx) {
   var cpm=PROGRAMAS_CPM[programa]||0;
   var valorReais=cpm>0?Math.round((pontos/1000)*cpm):0;
   var valorStr=valorReais>0?'R$ '+valorReais.toLocaleString('pt-BR'):'—';
-  var linkProg=PROGRAMAS_LINK[programa]||'';
+  var linkProg=linkPrograma(programa,'grupo-emissao');
   var trechoInfo=tipo==='internacional'?' o trecho em '+classe:'';
   var msg='*'+origem+' - '+destino+' por '+pontos.toLocaleString('pt-BR')+' pontos OU '+valorStr+trechoInfo+'*\n\n';
   msg+=RODAPE_MILHAS+'\n\n';
