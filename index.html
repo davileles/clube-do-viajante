@@ -392,9 +392,22 @@ var PROGRAMAS_SLUG = {
 // passthrough (/slug/caminho); os demais dominios caem no modo ?u=.
 var AFILIADOS = [
   { slug:'smiles', hostBase:'www.smiles.com.br',       dominios:['smiles.com.br'] },
-  { slug:'latam',  hostBase:'www.latamairlines.com',   dominios:['latamairlines.com','latampass.latam.com'] },
+  { slug:'latam',  hostBase:'www.latamairlines.com',   dominios:['latamairlines.com','latampass.latam.com','latampass.com'] },
   { slug:'azul',   hostBase:'www.voeazul.com.br',      dominios:['voeazul.com.br'] }
 ];
+
+// Campanhas fixas da LATAM Pass: a LATAM reaproveita a mesma URL a cada nova
+// rodada da oferta, entao cada uma ganha slug proprio em links.json. Isso separa
+// os cliques por campanha em cliques.json e preserva o utm_campaign correto --
+// no modo ?u= os params do slug generico 'latam' sobrescreveriam os da campanha.
+// Chave = host (sem www) + pathname sem barra final. Espelhar em links.json.
+var PATH_SLUG = {
+  'latampass.latam.com/pt_br/promocao/esfera-milhas-extras': 'latam-esfera',
+  'latampass.latam.com/pt_br/promocao/livelo-milhas-extras': 'latam-livelo',
+  'latampass.latam.com/pt_br/promocao/itau-milhas-extras':   'latam-itau',
+  'latampass.latam.com/pt_br/promocao/bancos-milhas-extras': 'latam-bancos',
+  'latampass.com/facilidades/compra-milhas/lp':              'latam-compra'
+};
 
 function afiliarLink(url, origem) {
   if (!url) return url;
@@ -403,6 +416,9 @@ function afiliarLink(url, origem) {
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return url;
   var host = u.hostname.toLowerCase();
   if (host === 'ir.clubedoviajante.com.br') return url; // ja mascarado
+  // Campanha fixa conhecida -> slug dedicado no modo destino padrao (sem ?u=)
+  var slugFixo = PATH_SLUG[host.replace(/^www\./,'') + u.pathname.replace(/\/+$/,'')];
+  if (slugFixo) return IR_BASE + slugFixo + (origem ? '?o='+encodeURIComponent(origem) : '');
   var cfg = null;
   for (var i=0;i<AFILIADOS.length;i++) {
     var a = AFILIADOS[i];
