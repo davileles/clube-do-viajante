@@ -1198,6 +1198,7 @@ function gerarMensagemEmissao(idx) {
   var valorReais=cpm>0?Math.round((pontos/1000)*cpm):0;
   var valorStr=valorReais>0?'R$ '+valorReais.toLocaleString('pt-BR'):'—';
   var linkProg=linkPrograma(programa,'grupo-emissao');
+  if (!linkProg){alert('O programa "'+programa+'" nao tem link cadastrado.\n\nCadastre o slug em PROGRAMAS_SLUG (gerador-cdv) e em links.json (painel-cdv) antes de gerar a mensagem.');return;}
   var trechoInfo=tipo==='internacional'?' o trecho em '+classe:'';
   var msg='*'+origem+' - '+destino+' por '+pontos.toLocaleString('pt-BR')+' pontos OU '+valorStr+trechoInfo+'*\n\n';
   msg+=RODAPE_MILHAS+'\n\n';
