@@ -386,6 +386,53 @@ var PROGRAMAS_SLUG = {
   'Finnair Plus':'finnair',
   'Aeroplan':'aeroplan'
 };
+// Dominios com afiliacao ativa. Qualquer URL desses programas -- campanha,
+// compra/transferencia de pontos, cartao, clube -- passa pela mascara /ir, que
+// anexa os parametros de afiliado do links.json. hostBase e o host usado no modo
+// passthrough (/slug/caminho); os demais dominios caem no modo ?u=.
+var AFILIADOS = [
+  { slug:'smiles', hostBase:'www.smiles.com.br',       dominios:['smiles.com.br'] },
+  { slug:'latam',  hostBase:'www.latamairlines.com',   dominios:['latamairlines.com','latampass.latam.com'] },
+  { slug:'azul',   hostBase:'www.voeazul.com.br',      dominios:['voeazul.com.br'] }
+];
+
+function afiliarLink(url, origem) {
+  if (!url) return url;
+  var u;
+  try { u = new URL(String(url).trim()); } catch(e) { return url; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return url;
+  var host = u.hostname.toLowerCase();
+  if (host === 'ir.clubedoviajante.com.br') return url; // ja mascarado
+  var cfg = null;
+  for (var i=0;i<AFILIADOS.length;i++) {
+    var a = AFILIADOS[i];
+    for (var j=0;j<a.dominios.length;j++) {
+      var d = a.dominios[j];
+      if (host === d || host === 'www.'+d || host.endsWith('.'+d)) { cfg = a; break; }
+    }
+    if (cfg) break;
+  }
+  if (!cfg) return url;
+  var qs = u.search ? u.search.slice(1) : '';
+  var extra = origem ? 'o='+encodeURIComponent(origem) : '';
+  var query = [qs, extra].filter(Boolean).join('&');
+  if (host === cfg.hostBase || host === cfg.hostBase.replace(/^www\./,'')) {
+    var path = u.pathname === '/' ? '' : u.pathname;
+    return IR_BASE + cfg.slug + path + (query ? '?'+query : '');
+  }
+  return IR_BASE + cfg.slug + '?u=' + encodeURIComponent(u.origin + u.pathname + u.search) + (extra ? '&'+extra : '');
+}
+
+// Reescreve todas as URLs afiliadas dentro de um texto ja montado.
+function afiliarTexto(txt, origem) {
+  if (!txt) return txt;
+  return String(txt).replace(/https?:\/\/[^\s<>"']+/g, function(m){
+    var fim = '';
+    while (/[.,;:)\]]$/.test(m)) { fim = m.slice(-1)+fim; m = m.slice(0,-1); }
+    return afiliarLink(m, origem) + fim;
+  });
+}
+
 function linkPrograma(programa, origem) {
   var slug = PROGRAMAS_SLUG[programa];
   if (!slug) return '';
@@ -976,7 +1023,7 @@ function gerarOferta() {
     if (loja && loja !== LOJA_TODAS) msg += '🛒 *LOJA* '+loja+'\n\n';
     if (cupom)       msg += '🏷️ *CUPOM* '+cupom+'\n\n';
     if (importante)  msg += '⚠️ *IMPORTANTE* '+importante+'\n\n';
-    msg += '🔗 *LINK* '+(link||'—')+'\n\n';
+    msg += '🔗 *LINK* '+(afiliarLink(link,'of')||'—')+'\n\n';
     msg += RODAPE_OFERTA;
   }
 
@@ -1369,7 +1416,7 @@ function renderAlertas(data) {
 
 // monta a mensagem do alerta já com o bloco de histórico da rota
 function mensagemAlertaComHistorico(o) {
-  var msg = o.mensagemFormatada || '';
+  var msg = afiliarTexto(o.mensagemFormatada || '', 'alerta');
   var d = o.dadosExtraidos || {};
   if (!d.origem || !d.destino || !d.programa) return msg;
   return inserirBlocoHistorico(msg, {
@@ -1993,7 +2040,7 @@ function montarMensagemRadar(o) {
     msg += '📆 *PRAZO* ' + o.prazo + '\n\n';
   }
   if (o.importante) msg += '⚠️ *IMPORTANTE* ' + stripEmojis(o.importante) + '\n\n';
-  msg += '🔗 *LINK* ' + (o.link || '—') + '\n\n';
+  msg += '🔗 *LINK* ' + (afiliarLink(o.link,'of') || '—') + '\n\n';
   msg += RODAPE_OFERTA;
   return msg;
 }
