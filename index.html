@@ -1176,6 +1176,8 @@ function inverterEmissao(idx) {
 var _passagensCache = null, _passagensCacheTs = 0;
 var PASSAGENS_CACHE_MS = 3 * 60 * 1000;
 var HIST_MIN_AMOSTRAS = 2; // mínimo de emissões p/ mostrar o bloco
+var HIST_JANELA_DIAS = 180; // janela real usada em MÍN./MÉDIA 180 DIAS
+var HIST_OUTLIER_FATOR = 3; // descarta valores fora de mediana/3 .. mediana*3
 
 async function ensureHistorico(force) {
   var agora = Date.now();
@@ -1197,25 +1199,55 @@ function _normHist(s) {
   return (s == null ? '' : String(s)).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 }
 
+// converte enviadoEm para timestamp; aceita ISO completo e "YYYY-MM-DD" (lote importado)
+function _tsPassagem(v) {
+  if (!v) return NaN;
+  var t = Date.parse(v);
+  return isFinite(t) ? t : NaN;
+}
+
+// mediana de um array numerico (nao destrutivo)
+function _medianaHist(arr) {
+  var a = arr.slice().sort(function (x, y) { return x - y; });
+  var n = a.length;
+  if (!n) return 0;
+  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+}
+
 // calcula estatísticas da rota (mesma origem/destino/programa/cabine/cia) nos últimos 180 dias
 function calcularHistoricoRota(dados) {
   var items = _passagensCache || [];
   var o = _normHist(dados.origem), d = _normHist(dados.destino), pr = _normHist(dados.programa);
   var cab = _normHist(dados.cabine), ci = _normHist(dados.cia);
   if (!o || !d || !pr) return null;
+  var corte = Date.now() - HIST_JANELA_DIAS * 24 * 60 * 60 * 1000;
   var m = items.filter(function (p) {
     if (_normHist(p.origem) !== o) return false;
     if (_normHist(p.destino) !== d) return false;
     if (_normHist(p.programa) !== pr) return false;
     if (cab && _normHist(p.cabine) !== cab) return false;
     if (ci && _normHist(p.cia) !== ci) return false;
+    var t = _tsPassagem(p.enviadoEm);
+    if (!isFinite(t) || t < corte) return false;
     return true;
   });
   var pts = m.map(function (p) { return Number(p.pontos) || 0; }).filter(function (x) { return x > 0; });
   if (pts.length < HIST_MIN_AMOSTRAS) return null;
-  var menor = Math.min.apply(null, pts);
-  var soma = pts.reduce(function (a, b) { return a + b; }, 0);
-  return { n: pts.length, menor: menor, media: Math.round(soma / pts.length) };
+  // descarta outliers (registros corrompidos / cabine trocada) via mediana
+  var med = _medianaHist(pts);
+  var validos = pts;
+  if (med > 0) {
+    var f = pts.filter(function (x) { return x <= med * HIST_OUTLIER_FATOR && x >= med / HIST_OUTLIER_FATOR; });
+    if (f.length >= HIST_MIN_AMOSTRAS) validos = f;
+  }
+  var menor = Math.min.apply(null, validos);
+  var soma = validos.reduce(function (a, b) { return a + b; }, 0);
+  return {
+    n: validos.length,
+    descartados: pts.length - validos.length,
+    menor: menor,
+    media: Math.round(soma / validos.length)
+  };
 }
 
 // monta o bloco de texto do histórico (ou '' se não houver dados suficientes)
