@@ -103,6 +103,17 @@ textarea.out{padding:1.25rem 1.5rem;font-family:'Courier New',monospace;font-siz
 .alerta-imgs img{flex:1 1 calc(50% - 4px);min-width:120px;border-radius:8px;object-fit:contain;max-height:260px;background:var(--surface2)}
 .alerta-texto{font-size:12px;color:var(--muted);white-space:pre-wrap;word-break:break-word;line-height:1.6;max-height:280px;overflow-y:auto}
 .alerta-edit{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:'Courier New',monospace;line-height:1.7;resize:vertical;min-height:420px;max-height:78vh;overflow-y:auto;outline:none;box-sizing:border-box}
+.alerta-campos{padding:12px 14px;border-top:1px solid var(--border)}
+.alerta-campos .ac-title{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:800;margin-bottom:8px;display:block}
+.ac-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.ac-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.ac-f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ac-f label{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700}
+.ac-f input,.ac-f select,.ac-f textarea{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:12px;font-family:'Montserrat',sans-serif;outline:none;box-sizing:border-box;width:100%}
+.ac-f textarea{min-height:58px;resize:vertical;font-family:'Courier New',monospace;line-height:1.5}
+.ac-f input:focus,.ac-f select:focus,.ac-f textarea:focus{border-color:var(--accent)}
+.ac-aviso{margin-top:8px;font-size:11px;color:#f59e0b;font-weight:700;min-height:14px}
+@media(max-width:900px){.ac-grid2{grid-template-columns:1fr}}
 .alerta-edit:focus{border-color:var(--accent)}
 .alerta-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .alerta-fb{font-size:12px;font-weight:700;margin-left:auto}
@@ -360,6 +371,10 @@ var LOJA_TODAS = 'Todas as disponíveis no ato da compra são válidas.';
 var RODAPE_OFERTA = '`Faça parte do Clube do Viajante e economize até 90% nas suas passagens: https://clubedoviajante.com.br/`';
 var RODAPE_MILHAS = '`Dica de emissão encontrada por @davileles - Clube do Viajante`';
 var BALCAO_LINK   = '`Faça parte do Balcão clicando aqui: https://pay.hub.la/TkIbYhix67evTSu1be7c`';
+
+// Programas de emissao dos seletores (aba Emissao e campos estruturados do
+// Alerta). Ordem alfabetica por convencao de UI do CDV.
+var PROGRAMAS_EMISSAO = ['AAdvantage','Aeroplan','Azul Fidelidade','Azul pelo Mundo','Executive Club','Finnair Plus','Flying Club','Iberia Plus','LATAM Pass','Privilege Club','Smiles','SUMA','TAP'];
 
 var PROGRAMAS_CPM = {
   'Smiles':18,'Azul Fidelidade':15,'Azul pelo Mundo':15,
@@ -1083,7 +1098,7 @@ function renderEmissoes() {
 function buildEmissaoFormHTML(obj, idx) {
   var id = 'm-em-' + idx;
   var programaOptions = '';
-  var programas = ['AAdvantage','Aeroplan','Azul Fidelidade','Azul pelo Mundo','Executive Club','Finnair Plus','Flying Club','Iberia Plus','LATAM Pass','Privilege Club','Smiles','SUMA','TAP'];
+  var programas = PROGRAMAS_EMISSAO;
   programas.forEach(function(p) { programaOptions += '<option value="'+p+'"'+(obj.programa===p?' selected':'')+'>'+p+'</option>'; });
   var isIntl = obj.tipo === 'internacional';
   return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
@@ -1275,17 +1290,41 @@ function inserirBlocoHistorico(msg, dados) {
   return msg.slice(0, idx + 2) + bloco + '\n\n' + msg.slice(idx + 2);
 }
 
+// Fonte unica de verdade da aba Emissao: os campos do formulario.
+// emissoesPendentes[idx] guarda apenas o snapshot inicial da extracao; toda
+// leitura posterior (mensagem no WhatsApp E registro em passagens.json) passa
+// por aqui, para que uma correcao feita no campo valha nos dois destinos.
+function coletarEdicoesEmissao(idx) {
+  var id='m-em-'+idx;
+  var v=function(suf){ var el=document.getElementById(id+suf); return el?el.value:''; };
+  return {
+    origem:      v('-origem').trim(),
+    destino:     v('-destino').trim(),
+    pontos:      parseInt(v('-pontos'))||0,
+    programa:    v('-programa'),
+    cia:         v('-cia').trim(),
+    tipo:        v('-tipo'),
+    classe:      v('-classe'),
+    datas_ida:   v('-datas-ida').trim(),
+    datas_volta: v('-datas-volta').trim()
+  };
+}
+
 function gerarMensagemEmissao(idx) {
   var id='m-em-'+idx;
-  var origem=document.getElementById(id+'-origem').value.trim();
-  var destino=document.getElementById(id+'-destino').value.trim();
-  var pontos=parseInt(document.getElementById(id+'-pontos').value)||0;
-  var programa=document.getElementById(id+'-programa').value;
-  var cia=document.getElementById(id+'-cia').value.trim();
-  var tipo=document.getElementById(id+'-tipo').value;
-  var classe=document.getElementById(id+'-classe')?document.getElementById(id+'-classe').value:'';
-  var datasIda=document.getElementById(id+'-datas-ida').value.trim();
-  var datasVolta=document.getElementById(id+'-datas-volta').value.trim();
+  var ed=coletarEdicoesEmissao(idx);
+  // Devolve as edicoes ao objeto em memoria para que qualquer re-render do card
+  // reexiba o valor corrigido, e nao o original vindo da extracao.
+  emissoesPendentes[idx]=Object.assign(emissoesPendentes[idx]||{}, ed);
+  var origem=ed.origem;
+  var destino=ed.destino;
+  var pontos=ed.pontos;
+  var programa=ed.programa;
+  var cia=ed.cia;
+  var tipo=ed.tipo;
+  var classe=ed.classe;
+  var datasIda=ed.datas_ida;
+  var datasVolta=ed.datas_volta;
   if (!origem||!destino){alert('Preencha origem e destino.');return;}
   if (!pontos){alert('Informe a quantidade de pontos.');return;}
   if (!programa){alert('Selecione o programa de fidelidade.');return;}
@@ -1374,8 +1413,11 @@ async function enviarEmissao(idx) {
     if (d.ok){
       if (d.posicao > 0){s.style.color='#f59e0b';s.textContent='⏳ Na fila (pos. '+d.posicao+' — ~'+d.tempoMin+' min)';setTimeout(function(){s.textContent='';},10000);}
       else{s.style.color='#4ade80';s.textContent='✓ Enviado!';setTimeout(function(){s.textContent='';},4000);}
-      // Registra passagem no histórico
-      var em = emissoesPendentes[idx] || {};
+      // Registra passagem no histórico a partir dos CAMPOS na tela (nao do
+      // snapshot da extracao), garantindo que passagens.json e o Radar de
+      // Passagens do painel recebam exatamente o que foi revisado.
+      var em = coletarEdicoesEmissao(idx);
+      emissoesPendentes[idx]=Object.assign(emissoesPendentes[idx]||{}, em);
       if (em.origem && em.destino && em.programa) {
         registrarPassagem({
           origem:      em.origem,
@@ -1383,9 +1425,9 @@ async function enviarEmissao(idx) {
           cia:         em.cia || '',
           programa:    em.programa,
           pontos:      em.pontos || 0,
-          cabine:      em.classe || em.cabine || '',
-          datas_ida:   em.datas_ida || em.datasIda || '',
-          datas_volta: em.datas_volta || em.datasVolta || '',
+          cabine:      em.classe || '',
+          datas_ida:   em.datas_ida || '',
+          datas_volta: em.datas_volta || '',
           fonte:       'emissao'
         });
       }
@@ -1485,6 +1527,99 @@ function autoGrowAlertasTodos() {
   for (var i = 0; i < els.length; i++) autoGrowAlerta(els[i]);
 }
 
+// ══ CAMPOS ESTRUTURADOS DO ALERTA ══
+// Espelham dadosExtraidos no baileys-server. Sao a fonte de verdade tanto da
+// mensagem que sai no grupo quanto do registro em passagens.json (gravado pelo
+// worker de envio). Corrigir aqui — e nao direto no texto — propaga a correcao
+// para o Radar de Passagens do painel de membros.
+var ALERTA_CAMPOS_TEXTO = ['origem','destino','cia','pontos'];
+
+function acInput(id, campo, label, valor) {
+  return '<div class="ac-f"><label>'+label+'</label>'
+    +'<input id="ac-'+campo+'-'+id+'" value="'+escapeAttr(valor==null?'':String(valor))+'" oninput="marcarAlertaSujo('+id+')"/></div>';
+}
+function acSelect(id, campo, label, valor, opcoes) {
+  var opts = opcoes.map(function(o){
+    var v = typeof o === 'string' ? o : o.v;
+    var t = typeof o === 'string' ? o : o.t;
+    return '<option value="'+escapeAttr(v)+'"'+(String(valor||'')===v?' selected':'')+'>'+escapeHtml(t)+'</option>';
+  }).join('');
+  return '<div class="ac-f"><label>'+label+'</label>'
+    +'<select id="ac-'+campo+'-'+id+'" onchange="marcarAlertaSujo('+id+')">'+opts+'</select></div>';
+}
+function acTextarea(id, campo, label, valor) {
+  return '<div class="ac-f"><label>'+label+'</label>'
+    +'<textarea id="ac-'+campo+'-'+id+'" oninput="marcarAlertaSujo('+id+')">'+escapeHtml(valor==null?'':String(valor))+'</textarea></div>';
+}
+
+function blocoCamposAlerta(o) {
+  var d = o.dadosExtraidos || {};
+  var progOpts = [''].concat(PROGRAMAS_EMISSAO);
+  return '<div class="alerta-campos">'
+    +'<span class="ac-title">Dados da emissão — usados na mensagem e no registro de passagens</span>'
+    +'<div class="ac-grid">'
+    + acInput(o.id,'origem','Origem',d.origem)
+    + acInput(o.id,'destino','Destino',d.destino)
+    + acInput(o.id,'cia','Cia aérea',d.cia)
+    + acSelect(o.id,'programa','Programa',d.programa,progOpts)
+    + acInput(o.id,'pontos','Pontos',d.pontos)
+    + acSelect(o.id,'cabine','Cabine',d.cabine||'Economica',[{v:'Economica',t:'Econômica'},{v:'Executiva',t:'Executiva'}])
+    + acSelect(o.id,'tipoVoo','Tipo',d.tipoVoo||'internacional',[{v:'internacional',t:'Internacional'},{v:'nacional',t:'Nacional'}])
+    +'</div>'
+    +'<div class="ac-grid2">'
+    + acTextarea(o.id,'datasIda','🛫 Datas de ida',d.datasIda)
+    + acTextarea(o.id,'datasVolta','🛬 Datas de volta',d.datasVolta)
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">'
+    +'<button class="btn" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);font-size:12px;font-weight:700" onclick="regerarAlerta('+o.id+')">↻ Regerar mensagem com estes campos</button>'
+    +'<span class="ac-aviso" id="ac-aviso-'+o.id+'"></span>'
+    +'</div>'
+    +'</div>';
+}
+
+function marcarAlertaSujo(id) {
+  var av = document.getElementById('ac-aviso-'+id);
+  if (av) av.textContent = '⚠️ Campos alterados — clique em Regerar para refletir na mensagem.';
+}
+
+function coletarEdicoesAlerta(id) {
+  var v = function(campo){ var el = document.getElementById('ac-'+campo+'-'+id); return el ? el.value.trim() : null; };
+  var dados = {};
+  ['origem','destino','cia','programa','pontos','cabine','tipoVoo','datasIda','datasVolta'].forEach(function(c){
+    var val = v(c);
+    if (val !== null) dados[c] = val;
+  });
+  return dados;
+}
+
+// Regera a mensagem NO SERVIDOR, com o mesmo formatador usado na captura.
+// Evita duplicar a formatacao (links mascarados, bloco de historico, datas) no
+// front e garante que dadosExtraidos ja fique corrigido na fila do Baileys.
+async function regerarAlerta(id) {
+  var fb = document.getElementById('alerta-fb-'+id);
+  var av = document.getElementById('ac-aviso-'+id);
+  if (fb) { fb.style.color='var(--muted)'; fb.textContent='Regerando...'; }
+  try {
+    var r = await fetch(SERVER+'/painel/reformatar/'+id, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ dados: coletarEdicoesAlerta(id) })
+    });
+    var d = await r.json();
+    if (d.ok) {
+      var ta = document.getElementById('alerta-msg-'+id);
+      if (ta) { ta.value = d.mensagemFormatada; autoGrowAlerta(ta); }
+      var alertaObj = (typeof alertasData !== 'undefined' ? alertasData : []).find(function(x){return String(x.id)===String(id);});
+      if (alertaObj) { alertaObj.dadosExtraidos = d.dadosExtraidos; alertaObj.mensagemFormatada = d.mensagemFormatada; }
+      if (av) av.textContent = '';
+      if (fb) { fb.style.color='#22c55e'; fb.textContent='✓ Mensagem atualizada.'; }
+    } else {
+      if (fb) { fb.style.color='#ff585e'; fb.textContent='Erro: '+(d.erro||'falha'); }
+    }
+  } catch(e) {
+    if (fb) { fb.style.color='#ff585e'; fb.textContent='Sem resposta.'; }
+  }
+}
+
 function renderAlertaCard(o) {
   var d = o.dadosExtraidos || {};
   var data = new Date(o.timestamp).toLocaleString('pt-BR');
@@ -1510,6 +1645,7 @@ function renderAlertaCard(o) {
     +'<textarea class="alerta-edit" id="alerta-msg-'+o.id+'" oninput="autoGrowAlerta(this)">'+escapeHtml(mensagemAlertaComHistorico(o))+'</textarea>'
     +'</div>'
     +'</div>'
+    + blocoCamposAlerta(o)
     +'<div class="alerta-footer">'
     +'<button class="btn btn-aprovar" style="flex:1;padding:10px" onclick="aprovarAlerta('+o.id+')">✓ Aprovar e enviar</button>'
     +'<button class="btn" style="flex:0 0 auto;padding:10px 16px;background:#0ea5e9;color:#fff" onclick="reprocessarAlerta('+o.id+')">🔄 Reprocessar</button>'
@@ -1550,7 +1686,9 @@ async function aprovarAlerta(id) {
   var agendarEm = schedInput && schedInput.value ? isoParaSP(schedInput.value) : null;
   fb.style.color='var(--muted)'; fb.textContent = agendarEm ? 'Agendando...' : 'Enviando...';
   try {
-    var body = {mensagem:mensagem};
+    // Campos estruturados seguem junto: o Baileys aplica em dadosExtraidos antes
+    // de enviar, e o worker grava passagens.json com os dados revisados.
+    var body = {mensagem:mensagem, dados:coletarEdicoesAlerta(id)};
     if (agendarEm) body.agendarEm = agendarEm;
     var r = await fetch(SERVER+'/painel/aprovar/'+id, {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -1591,7 +1729,8 @@ async function rejeitarAlerta(id, salvar) {
       // Só registra em passagens.json se o usuário escolheu "Rejeitar e Salvar"
       if (salvar) {
         var alertaObj = (typeof alertasData !== 'undefined' ? alertasData : []).find(function(o){return String(o.id)===String(id);}) || {};
-        var de = alertaObj.dadosExtraidos || {};
+        // Campos da tela tem precedencia sobre o snapshot da extracao.
+        var de = Object.assign({}, alertaObj.dadosExtraidos || {}, coletarEdicoesAlerta(id));
         if (de.origem && de.destino && de.programa) {
           registrarPassagem({
             origem:      de.origem,
