@@ -95,6 +95,7 @@ textarea.out{padding:1.25rem 1.5rem;font-family:'Courier New',monospace;font-siz
 .atag-exec{background:rgba(192,132,252,.15);color:#c084fc;border:1px solid rgba(192,132,252,.3)}
 .atag-eco{background:rgba(103,232,249,.15);color:#67e8f9;border:1px solid rgba(103,232,249,.3)}
 .atag-prog{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.atag-suspeito{background:rgba(245,158,11,.18);color:#f59e0b;border:1px solid rgba(245,158,11,.45)}
 .alerta-body{display:grid;grid-template-columns:1fr 1fr;gap:0}
 .alerta-col{padding:14px;min-width:0}
 .alerta-col+.alerta-col{border-left:1px solid var(--border)}
@@ -113,6 +114,7 @@ textarea.out{padding:1.25rem 1.5rem;font-family:'Courier New',monospace;font-siz
 .ac-f textarea{min-height:58px;resize:vertical;font-family:'Courier New',monospace;line-height:1.5}
 .ac-f input:focus,.ac-f select:focus,.ac-f textarea:focus{border-color:var(--accent)}
 .ac-aviso{margin-top:8px;font-size:11px;color:#f59e0b;font-weight:700;min-height:14px}
+.ac-sanidade{font-size:11px;color:#ff585e;font-weight:700}
 @media(max-width:900px){.ac-grid2{grid-template-columns:1fr}}
 .alerta-edit:focus{border-color:var(--accent)}
 .alerta-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -1193,6 +1195,11 @@ var PASSAGENS_CACHE_MS = 3 * 60 * 1000;
 var HIST_MIN_AMOSTRAS = 2; // mínimo de emissões p/ mostrar o bloco
 var HIST_JANELA_DIAS = 180; // janela real usada em MÍN./MÉDIA 180 DIAS
 var HIST_OUTLIER_FATOR = 3; // descarta valores fora de mediana/3 .. mediana*3
+// ── sanidade do valor de pontos (pega dígito faltando na extração do alerta) ──
+var SANIDADE_FATOR_ROTA = 0.4;      // suspeito se < 40% da média da própria rota
+var SANIDADE_FATOR_DESTINO = 0.5;   // suspeito se < 50% do P10 do destino+cabine
+var SANIDADE_MIN_DESTINO = 5;       // amostras mínimas p/ usar a camada do destino
+var SANIDADE_PISO_ABSOLUTO = 1000;  // nenhum resgate real fica abaixo disso
 
 async function ensureHistorico(force) {
   var agora = Date.now();
@@ -1263,6 +1270,81 @@ function calcularHistoricoRota(dados) {
     menor: menor,
     media: Math.round(soma / validos.length)
   };
+}
+
+// percentil de um array numerico (nao destrutivo)
+function _percentilHist(arr, p) {
+  var a = arr.slice().sort(function (x, y) { return x - y; });
+  if (!a.length) return 0;
+  var i = Math.floor(a.length * p);
+  if (i >= a.length) i = a.length - 1;
+  return a[i];
+}
+
+// Verifica se o valor de pontos e plausivel. Retorna null (ok) ou {motivo, limiar, referencia}.
+// Camada 0: piso absoluto. Camada 1: media da propria rota. Camada 2: P10 do destino+cabine.
+function validarSanidadePontos(dados) {
+  var pts = Number(dados.pontos) || 0;
+  if (!pts) return null;
+  if (pts < SANIDADE_PISO_ABSOLUTO) {
+    return { referencia: 'piso', limiar: SANIDADE_PISO_ABSOLUTO,
+      motivo: 'nenhum resgate real fica abaixo de ' + SANIDADE_PISO_ABSOLUTO.toLocaleString('pt-BR') + ' pts' };
+  }
+  var h = calcularHistoricoRota(dados);
+  if (h && h.media > 0) {
+    var lim = Math.round(h.media * SANIDADE_FATOR_ROTA);
+    if (pts < lim) {
+      return { referencia: 'rota', limiar: lim,
+        motivo: 'a média desta rota nos últimos ' + HIST_JANELA_DIAS + ' dias é ' + h.media.toLocaleString('pt-BR') + ' pts (' + h.n + ' registros)' };
+    }
+    return null;
+  }
+  var items = _passagensCache || [];
+  var dest = _normHist(dados.destino), cab = _normHist(dados.cabine);
+  if (!dest) return null;
+  var pool = items.filter(function (p) {
+    if (_normHist(p.destino) !== dest) return false;
+    if (cab && _normHist(p.cabine) !== cab) return false;
+    return (Number(p.pontos) || 0) > 0;
+  }).map(function (p) { return Number(p.pontos); });
+  if (pool.length < SANIDADE_MIN_DESTINO) return null;
+  var p10 = _percentilHist(pool, 0.10);
+  var lim2 = Math.round(p10 * SANIDADE_FATOR_DESTINO);
+  if (pts < lim2) {
+    return { referencia: 'destino', limiar: lim2,
+      motivo: 'os 10% mais baratos com destino ' + dados.destino + ' partem de ' + p10.toLocaleString('pt-BR') + ' pts (' + pool.length + ' registros)' };
+  }
+  return null;
+}
+
+// texto curto do aviso inline (ja escapado) ou '' se o valor esta plausivel
+function textoSanidade(dados) {
+  var s = validarSanidadePontos(dados);
+  if (!s) return '';
+  return escapeHtml('\u26A0\uFE0F Valor suspeito — ' + s.motivo + '. Esperado acima de ' + s.limiar.toLocaleString('pt-BR') + ' pts.');
+}
+
+// revalida o aviso do card a partir dos campos editaveis
+function atualizarAvisoSanidade(id) {
+  var el = document.getElementById('ac-sanidade-' + id);
+  if (!el) return;
+  var d = coletarEdicoesAlerta(id);
+  el.innerHTML = (d.origem && d.destino) ? textoSanidade(d) : '';
+}
+
+// Confirm bloqueante. Retorna true se pode prosseguir.
+function confirmarSanidade(dados, acao) {
+  var s = validarSanidadePontos(dados);
+  if (!s) return true;
+  var pts = (Number(dados.pontos) || 0).toLocaleString('pt-BR');
+  return confirm(
+    '\u26A0\uFE0F VALOR SUSPEITO\n\n' +
+    dados.origem + ' \u2192 ' + dados.destino + '\n' +
+    'Valor informado: ' + pts + ' pts\n\n' +
+    'Motivo: ' + s.motivo + '.\n' +
+    'Esperado: acima de ' + s.limiar.toLocaleString('pt-BR') + ' pts.\n\n' +
+    'Pode ser um d\u00EDgito faltando na extra\u00E7\u00E3o. ' + acao + ' mesmo assim?'
+  );
 }
 
 // monta o bloco de texto do histórico (ou '' se não houver dados suficientes)
@@ -1394,6 +1476,11 @@ async function enviarEmissao(idx) {
   // Verificar agendamento
   var schedInput = document.getElementById(id+'-sched');
   var agendarEm = schedInput && schedInput.value ? isoParaSP(schedInput.value) : null;
+
+  // ── sanidade do valor antes de enviar e registrar em passagens.json ──
+  await ensureHistorico();
+  var _ed = coletarEdicoesEmissao(idx);
+  if (_ed.origem && _ed.destino && !confirmarSanidade({origem:_ed.origem,destino:_ed.destino,programa:_ed.programa||'',cabine:_ed.classe||'',cia:_ed.cia||'',pontos:_ed.pontos||0}, 'Enviar')) { s.textContent=''; return; }
 
   s.style.color='#eeeeee';s.textContent= agendarEm ? 'Agendando...' : 'Enviando...';
   var imgIda=emissoesPendentes[idx]&&emissoesPendentes[idx]['_imgSelecionada_ida'];
@@ -1574,12 +1661,14 @@ function blocoCamposAlerta(o) {
     +'<button class="btn" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);font-size:12px;font-weight:700" onclick="regerarAlerta('+o.id+')">↻ Regerar mensagem com estes campos</button>'
     +'<span class="ac-aviso" id="ac-aviso-'+o.id+'"></span>'
     +'</div>'
+    +'<div class="ac-sanidade" id="ac-sanidade-'+o.id+'" style="margin-top:6px">'+((d.origem&&d.destino)?textoSanidade({origem:d.origem,destino:d.destino,programa:d.programa||'',cabine:d.cabine||'',cia:d.cia||'',pontos:d.pontos||0}):'')+'</div>'
     +'</div>';
 }
 
 function marcarAlertaSujo(id) {
   var av = document.getElementById('ac-aviso-'+id);
   if (av) av.textContent = '⚠️ Campos alterados — clique em Regerar para refletir na mensagem.';
+  atualizarAvisoSanidade(id);
 }
 
 function coletarEdicoesAlerta(id) {
@@ -1626,6 +1715,8 @@ function renderAlertaCard(o) {
   var tipoTag = d.tipo==='ida_volta' ? '<span class="atag atag-iv">Ida e volta</span>' : d.tipo==='ida' ? '<span class="atag atag-ida">Somente ida</span>' : '';
   var cabineTag = d.cabine==='Executiva' ? '<span class="atag atag-exec">Executiva</span>' : '<span class="atag atag-eco">Econômica</span>';
   var progTag = d.programa ? '<span class="atag atag-prog">'+d.programa+'</span>' : '';
+  var _san = (d.origem && d.destino) ? validarSanidadePontos({origem:d.origem,destino:d.destino,programa:d.programa||'',cabine:d.cabine||'',cia:d.cia||'',pontos:d.pontos||0}) : null;
+  var sanidadeTag = _san ? '<span class="atag atag-suspeito" title="'+escapeAttr(_san.motivo)+'">⚠️ Valor suspeito</span>' : '';
   var rota = d.origem && d.destino ? '<span class="alerta-rota">'+d.origem+' → '+d.destino+'</span>' : '';
   var imgsHtml = '';
   if (o.imagens && o.imagens.length > 0) {
@@ -1636,7 +1727,7 @@ function renderAlertaCard(o) {
 
   return '<div class="alerta-card" id="alerta-card-'+o.id+'">'
     +'<div class="alerta-header">'
-    +'<span class="alerta-id">#'+o.id+'</span>'+rota+tipoTag+cabineTag+progTag
+    +'<span class="alerta-id">#'+o.id+'</span>'+rota+tipoTag+cabineTag+progTag+sanidadeTag
     +'<span class="alerta-time">'+data+'</span>'
     +'</div>'
     +'<div class="alerta-body">'
@@ -1684,6 +1775,9 @@ async function aprovarAlerta(id) {
   var mensagem = msgEl ? msgEl.value : '';
   var schedInput = document.getElementById('alerta-sched-'+id);
   var agendarEm = schedInput && schedInput.value ? isoParaSP(schedInput.value) : null;
+  // ── sanidade: o worker do Baileys grava passagens.json com estes dados ──
+  var _ed = coletarEdicoesAlerta(id);
+  if (_ed.origem && _ed.destino && !confirmarSanidade(_ed, 'Aprovar e enviar')) return;
   fb.style.color='var(--muted)'; fb.textContent = agendarEm ? 'Agendando...' : 'Enviando...';
   try {
     // Campos estruturados seguem junto: o Baileys aplica em dadosExtraidos antes
