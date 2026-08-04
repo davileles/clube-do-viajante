@@ -1196,10 +1196,19 @@ var HIST_MIN_AMOSTRAS = 2; // mínimo de emissões p/ mostrar o bloco
 var HIST_JANELA_DIAS = 180; // janela real usada em MÍN./MÉDIA 180 DIAS
 var HIST_OUTLIER_FATOR = 3; // descarta valores fora de mediana/3 .. mediana*3
 // ── sanidade do valor de pontos (pega dígito faltando na extração do alerta) ──
-var SANIDADE_FATOR_ROTA = 0.4;      // suspeito se < 40% da média da própria rota
-var SANIDADE_FATOR_DESTINO = 0.5;   // suspeito se < 50% do P10 do destino+cabine
-var SANIDADE_MIN_DESTINO = 5;       // amostras mínimas p/ usar a camada do destino
 var SANIDADE_PISO_ABSOLUTO = 1000;  // nenhum resgate real fica abaixo disso
+// Escopos de comparação, do mais específico ao mais amplo. Vale o PRIMEIRO que
+// tiver amostras suficientes: assim origem, destino, cia e programa entram na
+// conta sempre que houver histórico, e só afrouxamos quando não houver.
+var SANIDADE_NIVEIS = [
+  { chaves:['origem','destino','programa','cia','cabine'], min:2, base:'mediana', fator:0.40, rotulo:'mesma rota, cia e programa' },
+  { chaves:['origem','destino','programa','cabine'],       min:3, base:'p10',     fator:0.50, rotulo:'mesma rota e programa' },
+  { chaves:['origem','destino','cabine'],                  min:3, base:'p10',     fator:0.50, rotulo:'mesma rota, qualquer programa' },
+  { chaves:['destino','programa','cabine'],                min:5, base:'p10',     fator:0.50, rotulo:'mesmo destino e programa' },
+  { chaves:['destino','cabine'],                           min:5, base:'p10',     fator:0.50, rotulo:'mesmo destino, qualquer programa' },
+  // rede final: destinos sem histórico (ex.: primeira emissão para a cidade)
+  { chaves:['cabine'],                                     min:20, base:'p10',    fator:0.35, rotulo:'referência global da cabine' }
+];
 
 async function ensureHistorico(force) {
   var agora = Date.now();
@@ -1287,32 +1296,36 @@ function validarSanidadePontos(dados) {
   var pts = Number(dados.pontos) || 0;
   if (!pts) return null;
   if (pts < SANIDADE_PISO_ABSOLUTO) {
-    return { referencia: 'piso', limiar: SANIDADE_PISO_ABSOLUTO,
+    return { referencia: 'piso', limiar: SANIDADE_PISO_ABSOLUTO, n: 0,
       motivo: 'nenhum resgate real fica abaixo de ' + SANIDADE_PISO_ABSOLUTO.toLocaleString('pt-BR') + ' pts' };
   }
-  var h = calcularHistoricoRota(dados);
-  if (h && h.media > 0) {
-    var lim = Math.round(h.media * SANIDADE_FATOR_ROTA);
-    if (pts < lim) {
-      return { referencia: 'rota', limiar: lim,
-        motivo: 'a média desta rota nos últimos ' + HIST_JANELA_DIAS + ' dias é ' + h.media.toLocaleString('pt-BR') + ' pts (' + h.n + ' registros)' };
-    }
-    return null;
-  }
   var items = _passagensCache || [];
-  var dest = _normHist(dados.destino), cab = _normHist(dados.cabine);
-  if (!dest) return null;
-  var pool = items.filter(function (p) {
-    if (_normHist(p.destino) !== dest) return false;
-    if (cab && _normHist(p.cabine) !== cab) return false;
-    return (Number(p.pontos) || 0) > 0;
-  }).map(function (p) { return Number(p.pontos); });
-  if (pool.length < SANIDADE_MIN_DESTINO) return null;
-  var p10 = _percentilHist(pool, 0.10);
-  var lim2 = Math.round(p10 * SANIDADE_FATOR_DESTINO);
-  if (pts < lim2) {
-    return { referencia: 'destino', limiar: lim2,
-      motivo: 'os 10% mais baratos com destino ' + dados.destino + ' partem de ' + p10.toLocaleString('pt-BR') + ' pts (' + pool.length + ' registros)' };
+  for (var i = 0; i < SANIDADE_NIVEIS.length; i++) {
+    var nv = SANIDADE_NIVEIS[i];
+    // o nível só vale se todos os campos que ele exige estiverem preenchidos
+    var completo = true;
+    for (var k = 0; k < nv.chaves.length; k++) {
+      if (!_normHist(dados[nv.chaves[k]])) { completo = false; break; }
+    }
+    if (!completo) continue;
+    var pool = items.filter(function (p) {
+      for (var k2 = 0; k2 < nv.chaves.length; k2++) {
+        var campo = nv.chaves[k2];
+        if (_normHist(p[campo]) !== _normHist(dados[campo])) return false;
+      }
+      return (Number(p.pontos) || 0) > 0;
+    }).map(function (p) { return Number(p.pontos); });
+    if (pool.length < nv.min) continue;
+    // mediana (robusta a registros já corrompidos no pool) ou P10 nos escopos amplos
+    var ref = nv.base === 'mediana' ? _medianaHist(pool) : _percentilHist(pool, 0.10);
+    if (!(ref > 0)) continue;
+    var lim = Math.round(ref * nv.fator);
+    if (pts < lim) {
+      return { referencia: nv.rotulo, limiar: lim, n: pool.length,
+        motivo: (nv.base === 'mediana' ? 'a mediana' : 'o P10') + ' de ' + pool.length +
+                ' registros com ' + nv.rotulo + ' é ' + ref.toLocaleString('pt-BR') + ' pts' };
+    }
+    return null; // escopo mais específico disponível aprovou o valor
   }
   return null;
 }
