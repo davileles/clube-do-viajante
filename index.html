@@ -1405,6 +1405,28 @@ function coletarEdicoesEmissao(idx) {
   };
 }
 
+// Grafia correta da cabine na mensagem. O valor guardado segue no formato
+// canonico (sem acento) para nao quebrar o casamento com passagens.json;
+// aqui so o texto exibido/enviado e corrigido. Preserva CAIXA ALTA.
+function rotuloCabine(c) {
+  var s = String(c == null ? '' : c).trim();
+  if (!s) return 'Econômica';
+  var base = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  var alta = s === s.toUpperCase();
+  var MAP = {
+    'economica': 'Econômica',
+    'economy': 'Econômica',
+    'economica premium': 'Econômica Premium',
+    'premium economica': 'Premium Econômica',
+    'executiva': 'Executiva',
+    'business': 'Executiva',
+    'primeira classe': 'Primeira Classe'
+  };
+  var r = MAP[base];
+  if (!r) return s;
+  return alta ? r.toUpperCase() : r;
+}
+
 function gerarMensagemEmissao(idx) {
   var id='m-em-'+idx;
   var ed=coletarEdicoesEmissao(idx);
@@ -1428,7 +1450,7 @@ function gerarMensagemEmissao(idx) {
   var valorStr=valorReais>0?'R$ '+valorReais.toLocaleString('pt-BR'):'—';
   var linkProg=linkPrograma(programa,'em');
   if (!linkProg){alert('O programa "'+programa+'" nao tem link cadastrado.\n\nCadastre o slug em PROGRAMAS_SLUG (gerador-cdv) e em links.json (painel-cdv) antes de gerar a mensagem.');return;}
-  var trechoInfo=tipo==='internacional'?' o trecho em '+classe:'';
+  var trechoInfo=tipo==='internacional'?' o trecho em '+rotuloCabine(classe):'';
   var msg='*'+origem+' - '+destino+' por '+pontos.toLocaleString('pt-BR')+' pontos OU '+valorStr+trechoInfo+'*\n\n';
   msg+=RODAPE_MILHAS+'\n\n';
   msg+='Você pode comprar essa passagem no Balcão de Milhas CDV por aproximadamente '+valorStr+' o trecho + taxa de embarque.\n\n';
