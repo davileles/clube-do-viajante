@@ -2054,6 +2054,13 @@ function formatarDataCurtaBR(iso) {
   return m ? m[3]+'/'+m[2] : (iso||'');
 }
 
+// Converte prazo "DD/MM/AAAA" da oferta para ISO "AAAA-MM-DD" (mesma regra do proxy)
+function prazoOfertaParaIso(prazoStr) {
+  var m = (prazoStr||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return null;
+  return m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2);
+}
+
 // Formata um valor de pontuação/cashback de acordo com a unidade do parceiro
 // (pontos por real/dólar, ou % de cashback no caso do Shopping Inter).
 function fmtValorHistorico(valor, h) {
@@ -2076,6 +2083,19 @@ function blocoHistoricoTransferencia(o) {
   if (!historicoTransferenciasData || !historicoTransferenciasData.items) return '';
   var chave = chaveHistorico(o.origem, o.destino);
   var anteriores = historicoTransferenciasData.items.filter(function(h){ return h.chave === chave; });
+
+  // Exclui o registro da PRÓPRIA campanha em avaliação (reenvio/lembrete não é
+  // uma ocorrência anterior). Mesma regra de dedup do proxy: mesma chave +
+  // mesmo prazo = mesma campanha. Fallback: registro cuja campanha ainda está
+  // ativa (prazo >= hoje) também é tratado como a campanha atual — cobre
+  // reenvios em que o prazo foi extraído em formato/data levemente diferente.
+  var prazoAtualIso = prazoOfertaParaIso(o.prazo);
+  var hojeIso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  anteriores = anteriores.filter(function(h){
+    if (prazoAtualIso && h.prazo && h.prazo === prazoAtualIso) return false;
+    if (h.prazo && h.prazo >= hojeIso) return false;
+    return true;
+  });
   if (!anteriores.length) return '';
 
   var atual = (o.bonusMax !== undefined && o.bonusMax !== null && o.bonusMax !== '') ? Number(o.bonusMax) : null;
