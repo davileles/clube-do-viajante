@@ -1,0 +1,51 @@
+{
+  "limiarRemocao": 150,
+  "arquivos": {
+    "index.html": {
+      "minLinhas": 2654,
+      "obrigatorio": [
+        "async function analisarMilhas(",
+        "async function analisarOferta(",
+        "async function aprovarAlerta(",
+        "async function aprovarOfertaPendente(",
+        "async function carregarAlertas(",
+        "async function carregarHistoricoTransferencias(",
+        "async function carregarOfertasPendentes(",
+        "async function chamarIA(",
+        "async function confirmarMesclar(",
+        "async function ensureHistorico(",
+        "async function enviarEmissao(",
+        "async function enviarWA(",
+        "async function limparFila(",
+        "async function regerarAlerta(",
+        "async function registrarPassagem(",
+        "async function rejeitarAlerta(",
+        "async function rejeitarOfertaPendente(",
+        "async function reprocessarAlerta(",
+        "function _medianaHist(",
+        "function _normHist(",
+        "function _percentilHist(",
+        "function _tsPassagem(",
+        "function abrirMesclar(",
+        "function acInput(",
+        "function acSelect("
+      ]
+    },
+    "index.js": {
+      "minLinhas": 360,
+      "obrigatorio": [
+        "app.get('/fetch'",
+        "app.get('/fetch-oferta'",
+        "app.get('/health'",
+        "app.get('/ofertas/pendentes'",
+        "app.get('/passagens/listar'",
+        "app.post('/alerta'",
+        "app.post('/ofertas/aprovar'",
+        "app.post('/ofertas/publicar'",
+        "app.post('/ofertas/rejeitar'",
+        "app.post('/passagens/excluir'",
+        "app.post('/passagens/registrar'"
+      ]
+    }
+  }
+}
