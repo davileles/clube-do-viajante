@@ -1585,8 +1585,21 @@ async function carregarAlertas() {
   }
 }
 
+// Itens do ecossistema TSP (cupons + ofertas de marketplace) nao pertencem a
+// aba Alertas do gerador — eles sao tratados no painel do TSP. O filtro antigo
+// era um blacklist fixo ('cupom_tsp' e 'oferta_awin'), entao cada nova loja
+// (oferta_magalu, oferta_ml, oferta_amazon, oferta_shopee) vazava para ca.
+// O prefixo 'oferta_' cobre tambem marketplaces que venham a ser criados.
+function ehItemTSP(o){
+  var t = String(o.tipoConteudo || '');
+  return t === 'cupom_tsp' || t.indexOf('oferta_') === 0;
+}
+function ehAlertaGerador(o){
+  return !ehItemTSP(o) && !String(o.grupoOrigem || '').startsWith('telegram:');
+}
+
 function atualizarBadge() {
-  var pendentes = alertasData.filter(function(o){ return o.status === 'pendente' && o.tipoConteudo !== 'cupom_tsp' && o.tipoConteudo !== 'oferta_awin' && !(o.grupoOrigem||'').startsWith('telegram:'); }).length;
+  var pendentes = alertasData.filter(function(o){ return o.status === 'pendente' && ehAlertaGerador(o); }).length;
   var badge = document.getElementById('alertas-badge');
   if (pendentes > 0) { badge.textContent = pendentes; badge.style.display = 'inline-block'; }
   else { badge.style.display = 'none'; }
@@ -1601,7 +1614,7 @@ function renderAlertas(data) {
     bufferTxt.textContent = emBuffer + ' item(s) aguardando janela de 3 min...';
   } else { bufferBar.style.display = 'none'; }
 
-  var ofertas = (data.ofertas || []).filter(function(o){ return o.tipoConteudo !== 'cupom_tsp' && o.tipoConteudo !== 'oferta_awin' && !(o.grupoOrigem||'').startsWith('telegram:'); });
+  var ofertas = (data.ofertas || []).filter(ehAlertaGerador);
   var pendentes = ofertas.filter(function(o){ return o.status === 'pendente'; });
   var processados = ofertas.filter(function(o){ return o.status !== 'pendente'; });
 
