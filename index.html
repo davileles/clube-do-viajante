@@ -79,6 +79,22 @@ textarea.out{padding:1.25rem 1.5rem;font-family:'Courier New',monospace;font-siz
 .camp-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;background:var(--surface2);border:1px solid var(--border);color:var(--muted)}
 .camp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .camp-sec{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted2);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.camp-passo{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.camp-passo-hd{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;transition:background .15s}
+.camp-passo-hd:hover{background:var(--surface2)}
+.camp-num{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);color:var(--muted);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.camp-passo.ok .camp-num{background:#22c55e;border-color:#22c55e;color:#04210f}
+.camp-passo-tit{font-size:13px;font-weight:800;color:var(--text);letter-spacing:.2px}
+.camp-passo-res{font-size:11.5px;color:var(--muted);margin-top:2px}
+.camp-chev{color:var(--muted2);font-size:12px;transition:transform .15s}
+.camp-passo.aberto .camp-chev{transform:rotate(180deg)}
+.camp-passo-bd{display:none;padding:0 16px 16px;border-top:1px solid var(--border)}
+.camp-passo.aberto .camp-passo-bd{display:block;padding-top:16px}
+.camp-check{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;color:var(--muted)}
+.camp-check.ok{color:var(--text)}
+.camp-sujo{background:#f59e0b1a;border:1px solid #f59e0b55;border-radius:10px;padding:10px 12px;font-size:12px;color:#f5b544;margin-bottom:12px}
+body[data-tema="light"] .camp-sujo{background:#fff7e6;border-color:#f0c26b;color:#9a6400}
+body[data-tema="light"] .camp-passo.ok .camp-num{background:#16a34a;border-color:#16a34a;color:#fff}
 .camp-sec:first-child{margin-top:0}
 .camp-bloco{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px}
 .camp-bloco-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
@@ -436,105 +452,54 @@ body[data-tema="light"] textarea.out{color:var(--text)}
 
   <div id="camp-app" style="display:none">
 
-    <!-- Seletor + controle -->
-    <div class="card">
-      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:12px">
+    <!-- Campanha selecionada -->
+    <div class="card" style="padding:1rem 1.25rem">
+      <div style="display:flex;gap:10px;align-items:flex-end">
         <div class="field" style="flex:1">
           <label>Campanha</label>
           <select id="camp-sel" onchange="campSelecionar(this.value)"></select>
         </div>
-        <button class="camp-mini" style="padding:10px 14px" onclick="campRecarregar()">↻</button>
+        <button class="camp-mini" style="padding:10px 14px" onclick="campRecarregar()" title="Recarregar do servidor">↻</button>
         <button class="camp-mini" style="padding:10px 14px" onclick="campNova()">+ Nova</button>
       </div>
-      <div id="camp-contadores" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-aprovar" onclick="campStatus('ativa')">▶️ Iniciar / Retomar</button>
-        <button class="btn btn-rejeitar" onclick="campStatus('pausada')">⏸️ Pausar</button>
-      </div>
-      <div id="camp-status-fb" style="font-size:12px;margin-top:10px;text-align:center"></div>
     </div>
 
-    <!-- Configuração -->
-    <div class="card">
-      <div class="camp-sec">Ritmo de envio</div>
-      <div class="camp-grid">
-        <div class="field"><label>Intervalo mínimo <span class="tag">min</span></label><input type="number" id="cfg-int-min" min="1"/></div>
-        <div class="field"><label>Intervalo máximo <span class="tag">min</span></label><input type="number" id="cfg-int-max" min="1"/></div>
-        <div class="field"><label>Teto diário <span class="tag">máx. 25</span></label><input type="number" id="cfg-diario" min="1" max="25"/></div>
-        <div class="field"><label>Pausa longa a cada <span class="tag">envios</span></label><input type="number" id="cfg-pausa-cada" min="0"/></div>
-        <div class="field"><label>Pausa longa mín <span class="tag">min</span></label><input type="number" id="cfg-pausa-min" min="0"/></div>
-        <div class="field"><label>Pausa longa máx <span class="tag">min</span></label><input type="number" id="cfg-pausa-max" min="0"/></div>
-        <div class="field"><label>Delay entre blocos mín <span class="tag">s</span></label><input type="number" id="cfg-delay-min" min="0"/></div>
-        <div class="field"><label>Delay entre blocos máx <span class="tag">s</span></label><input type="number" id="cfg-delay-max" min="0"/></div>
-      </div>
-
-      <div class="camp-sec">Janela de disparo</div>
-      <div class="field" style="margin-bottom:12px">
-        <label>Horários <span class="tag">um por linha, formato 09:00-11:30</span></label>
-        <textarea id="cfg-janelas" style="min-height:64px;font-family:'Courier New',monospace;font-size:13px"></textarea>
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:var(--text);cursor:pointer">
-        <input type="checkbox" id="cfg-uteis" style="width:auto"/> Somente dias úteis
-      </label>
-
-      <div class="camp-sec">Segurança</div>
-      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:var(--muted);margin-bottom:12px">
-        <input type="checkbox" id="cfg-verificar" checked disabled style="width:auto"/> Verificar número no WhatsApp antes de enviar <span class="tag">(travado)</span>
-      </label>
-      <div class="field" style="margin-bottom:12px">
-        <label>Parar após N erros seguidos</label>
-        <input type="number" id="cfg-erros" min="1"/>
-      </div>
-
-      <div class="camp-sec">Follow-up</div>
-      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:var(--text);margin-bottom:12px;cursor:pointer">
-        <input type="checkbox" id="cfg-fup-ativo" style="width:auto"/> Enviar follow-up para quem não respondeu
-      </label>
-      <div class="camp-grid">
-        <div class="field"><label>Depois de <span class="tag">dias</span></label><input type="number" id="cfg-fup-dias" min="1"/></div>
-        <div class="field"><label>Com a mensagem</label><select id="cfg-fup-msg"></select></div>
-      </div>
-
-      <button class="btn btn-gerar" style="margin-top:18px" onclick="campSalvar()">💾 Salvar campanha</button>
-      <div id="camp-salvar-fb" style="font-size:12px;margin-top:10px;text-align:center"></div>
-    </div>
-
-    <!-- Mensagens -->
-    <div class="card">
-      <div class="camp-sec">Mensagens</div>
-      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px">
-        <div class="field" style="flex:1">
-          <label>Editando</label>
-          <select id="camp-msg-sel" onchange="campRenderBlocos()"></select>
+    <!-- PASSO 1 — PÚBLICO -->
+    <div class="camp-passo aberto" id="passo-publico">
+      <div class="camp-passo-hd" onclick="campToggle('publico')">
+        <span class="camp-num">1</span>
+        <div style="flex:1">
+          <div class="camp-passo-tit">Quem vai receber</div>
+          <div class="camp-passo-res" id="res-publico">—</div>
         </div>
-        <button class="camp-mini" style="padding:10px 14px" onclick="campNovaMensagem()">+ Nova</button>
+        <span class="camp-chev">▾</span>
       </div>
-      <div class="camp-grid" style="margin-bottom:14px">
-        <div class="field"><label>Nome</label><input type="text" id="camp-msg-nome" oninput="campMsgMeta()"/></div>
-        <div class="field"><label>Segmento <span class="tag">* = todos</span></label><input type="text" id="camp-msg-seg" oninput="campMsgMeta()"/></div>
-      </div>
+      <div class="camp-passo-bd">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="camp-mini" onclick="campToggleImport()">📥 Importar lista</button>
+          <button class="camp-mini" onclick="campCopiarPublico()">📋 Copiar de outra campanha</button>
+        </div>
 
-      <div id="camp-vars" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:14px"></div>
-      <div id="camp-blocos"></div>
-      <div style="display:flex;gap:8px;margin-bottom:18px">
-        <button class="camp-mini" onclick="campAddBloco('texto')">+ Bloco de texto</button>
-        <button class="camp-mini" onclick="campAddBloco('imagem')">+ Bloco de imagem</button>
-      </div>
+        <div id="camp-import" style="display:none;margin-bottom:16px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <button class="camp-mini" onclick="campBaixarModelo()">⬇️ Baixar modelo (.csv)</button>
+            <button class="camp-mini" onclick="document.getElementById('camp-file').click()">📄 Enviar arquivo</button>
+            <input type="file" id="camp-file" accept=".csv,.tsv,.txt,text/csv,text/plain" style="display:none" onchange="campLerArquivo(this)"/>
+          </div>
+          <p style="font-size:11.5px;color:var(--muted2);line-height:1.6;margin-bottom:12px">
+            Aceita <b>.csv</b> ou <b>.tsv</b> com a primeira linha de cabeçalho, separador <b>;</b> <b>,</b> ou tabulação.
+            Colunas do modelo: <code>nome · telefone · email · produto · valor · dataFalha · segmento · obs</code>.
+            Só <b>telefone</b> é obrigatório. Qualquer coluna a mais pode virar variável de mensagem no mapeamento.
+          </p>
+          <div class="field" style="margin-bottom:10px">
+            <label>Ou cole direto da planilha <span class="tag">Ctrl+C no Sheets/Excel e Ctrl+V aqui</span></label>
+            <textarea id="camp-import-txt" style="min-height:120px;font-family:'Courier New',monospace;font-size:12px" placeholder="nome&#9;telefone&#9;email&#9;produto..."></textarea>
+          </div>
+          <button class="camp-mini" onclick="campAnalisarImport()">Analisar colunas</button>
+          <div id="camp-map" style="display:none;margin-top:14px"></div>
+        </div>
 
-      <div class="camp-sec">Prévia com contato real</div>
-      <div class="field" style="margin-bottom:12px">
-        <label>Contato</label>
-        <select id="camp-prev-sel" onchange="campRenderPreview()"></select>
-      </div>
-      <div id="camp-preview"></div>
-      <button class="camp-mini" style="margin-top:10px" onclick="campRenderPreview()">🎲 Sortear spintax de novo</button>
-    </div>
-
-    <!-- Contatos -->
-    <div class="card">
-      <div class="camp-sec">Público</div>
-      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:12px">
-        <div class="field" style="flex:1">
+        <div class="field" style="margin-bottom:12px;max-width:240px">
           <label>Filtrar por status</label>
           <select id="camp-filtro" onchange="campRenderContatos()">
             <option value="">Todos</option>
@@ -545,33 +510,129 @@ body[data-tema="light"] textarea.out{color:var(--text)}
             <option value="optout">Opt-out</option>
           </select>
         </div>
-        <button class="camp-mini" style="padding:10px 14px" onclick="campToggleImport()">📥 Importar público</button>
-      </div>
-
-      <div id="camp-import" style="display:none;margin-bottom:16px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-          <button class="camp-mini" onclick="campBaixarModelo()">⬇️ Baixar modelo (.csv)</button>
-          <button class="camp-mini" onclick="document.getElementById('camp-file').click()">📄 Enviar arquivo</button>
-          <input type="file" id="camp-file" accept=".csv,.tsv,.txt,text/csv,text/plain" style="display:none" onchange="campLerArquivo(this)"/>
+        <div style="overflow-x:auto">
+          <table class="camp-tab"><thead><tr>
+            <th>Nome</th><th>Telefone</th><th>Segmento</th><th>Mensagem</th><th>Status</th><th>Enviado</th>
+          </tr></thead><tbody id="camp-contatos"></tbody></table>
         </div>
-        <p style="font-size:11.5px;color:var(--muted2);line-height:1.6;margin-bottom:12px">
-          Aceita <b>.csv</b> ou <b>.tsv</b> com a primeira linha de cabeçalho, separador <b>;</b> <b>,</b> ou tabulação.
-          Colunas do modelo: <code>nome · telefone · email · produto · valor · dataFalha · segmento · obs</code>.
-          Só <b>telefone</b> é obrigatório. Qualquer coluna a mais pode virar variável de mensagem no mapeamento.
-        </p>
-        <div class="field" style="margin-bottom:10px">
-          <label>Ou cole direto da planilha <span class="tag">Ctrl+C no Sheets/Excel e Ctrl+V aqui</span></label>
-          <textarea id="camp-import-txt" style="min-height:120px;font-family:'Courier New',monospace;font-size:12px" placeholder="nome&#9;telefone&#9;email&#9;produto..."></textarea>
-        </div>
-        <button class="camp-mini" onclick="campAnalisarImport()">Analisar colunas</button>
-        <div id="camp-map" style="display:none;margin-top:14px"></div>
       </div>
+    </div>
 
-      <div style="overflow-x:auto">
-        <table class="camp-tab"><thead><tr>
-          <th>Nome</th><th>Telefone</th><th>Segmento</th><th>Mensagem</th><th>Status</th><th>Enviado</th>
-        </tr></thead><tbody id="camp-contatos"></tbody></table>
+    <!-- PASSO 2 — MENSAGEM -->
+    <div class="camp-passo" id="passo-mensagem">
+      <div class="camp-passo-hd" onclick="campToggle('mensagem')">
+        <span class="camp-num">2</span>
+        <div style="flex:1">
+          <div class="camp-passo-tit">O que será enviado</div>
+          <div class="camp-passo-res" id="res-mensagem">—</div>
+        </div>
+        <span class="camp-chev">▾</span>
       </div>
+      <div class="camp-passo-bd">
+        <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px">
+          <div class="field" style="flex:1">
+            <label>Editando</label>
+            <select id="camp-msg-sel" onchange="campRenderBlocos()"></select>
+          </div>
+          <button class="camp-mini" style="padding:10px 14px" onclick="campNovaMensagem()">+ Nova</button>
+        </div>
+        <div class="camp-grid" style="margin-bottom:14px">
+          <div class="field"><label>Nome</label><input type="text" id="camp-msg-nome" oninput="campMsgMeta()"/></div>
+          <div class="field"><label>Segmento <span class="tag">* = todos</span></label><input type="text" id="camp-msg-seg" oninput="campMsgMeta()"/></div>
+        </div>
+
+        <div id="camp-vars" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:14px"></div>
+        <div id="camp-blocos"></div>
+        <div style="display:flex;gap:8px;margin-bottom:18px">
+          <button class="camp-mini" onclick="campAddBloco('texto')">+ Bloco de texto</button>
+          <button class="camp-mini" onclick="campAddBloco('imagem')">+ Bloco de imagem</button>
+        </div>
+
+        <div class="camp-sec">Prévia com contato real</div>
+        <div class="field" style="margin-bottom:12px">
+          <label>Contato</label>
+          <select id="camp-prev-sel" onchange="campRenderPreview()"></select>
+        </div>
+        <div id="camp-preview"></div>
+        <button class="camp-mini" style="margin-top:10px" onclick="campRenderPreview()">🎲 Sortear spintax de novo</button>
+      </div>
+    </div>
+
+    <!-- PASSO 3 — RITMO -->
+    <div class="camp-passo" id="passo-ritmo">
+      <div class="camp-passo-hd" onclick="campToggle('ritmo')">
+        <span class="camp-num">3</span>
+        <div style="flex:1">
+          <div class="camp-passo-tit">Quando e em que ritmo</div>
+          <div class="camp-passo-res" id="res-ritmo">—</div>
+        </div>
+        <span class="camp-chev">▾</span>
+      </div>
+      <div class="camp-passo-bd" id="camp-cfg-corpo">
+        <div class="camp-sec" style="margin-top:0">Ritmo de envio</div>
+        <div class="camp-grid">
+          <div class="field"><label>Intervalo mínimo <span class="tag">min</span></label><input type="number" id="cfg-int-min" min="1"/></div>
+          <div class="field"><label>Intervalo máximo <span class="tag">min</span></label><input type="number" id="cfg-int-max" min="1"/></div>
+          <div class="field"><label>Teto diário <span class="tag">máx. 25</span></label><input type="number" id="cfg-diario" min="1" max="25"/></div>
+          <div class="field"><label>Pausa longa a cada <span class="tag">envios</span></label><input type="number" id="cfg-pausa-cada" min="0"/></div>
+          <div class="field"><label>Pausa longa mín <span class="tag">min</span></label><input type="number" id="cfg-pausa-min" min="0"/></div>
+          <div class="field"><label>Pausa longa máx <span class="tag">min</span></label><input type="number" id="cfg-pausa-max" min="0"/></div>
+          <div class="field"><label>Delay entre blocos mín <span class="tag">s</span></label><input type="number" id="cfg-delay-min" min="0"/></div>
+          <div class="field"><label>Delay entre blocos máx <span class="tag">s</span></label><input type="number" id="cfg-delay-max" min="0"/></div>
+        </div>
+
+        <div class="camp-sec">Janela de disparo</div>
+        <div class="field" style="margin-bottom:12px">
+          <label>Horários <span class="tag">um por linha, formato 09:00-11:30</span></label>
+          <textarea id="cfg-janelas" style="min-height:64px;font-family:'Courier New',monospace;font-size:13px"></textarea>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="cfg-uteis" style="width:auto"/> Somente dias úteis
+        </label>
+
+        <div class="camp-sec">Segurança</div>
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:var(--muted);margin-bottom:12px">
+          <input type="checkbox" id="cfg-verificar" checked disabled style="width:auto"/> Verificar número no WhatsApp antes de enviar <span class="tag">(travado)</span>
+        </label>
+        <div class="field" style="margin-bottom:12px">
+          <label>Parar após N erros seguidos</label>
+          <input type="number" id="cfg-erros" min="1"/>
+        </div>
+
+        <div class="camp-sec">Follow-up</div>
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:var(--text);margin-bottom:12px;cursor:pointer">
+          <input type="checkbox" id="cfg-fup-ativo" style="width:auto"/> Enviar follow-up para quem não respondeu
+        </label>
+        <div class="camp-grid">
+          <div class="field"><label>Depois de <span class="tag">dias</span></label><input type="number" id="cfg-fup-dias" min="1"/></div>
+          <div class="field"><label>Com a mensagem</label><select id="cfg-fup-msg"></select></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SALVAR -->
+    <div class="card" style="padding:1rem 1.25rem">
+      <div id="camp-aviso-sujo" class="camp-sujo" style="display:none">
+        ⚠️ Há alterações não salvas nos passos acima. Elas só valem depois de salvar.
+      </div>
+      <button class="btn btn-gerar" style="margin-top:0" onclick="campSalvar()">💾 Salvar campanha</button>
+      <p style="font-size:11px;color:var(--muted2);text-align:center;margin-top:8px">
+        Salva os três passos de uma vez: público, mensagem e ritmo.
+      </p>
+      <div id="camp-salvar-fb" style="font-size:12px;margin-top:6px;text-align:center"></div>
+    </div>
+
+    <!-- DISPARO -->
+    <div class="card">
+      <div class="camp-sec" style="margin-top:0">Disparo</div>
+      <div id="camp-check-lista" style="margin-bottom:14px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-aprovar" id="camp-btn-iniciar" onclick="campStatus('ativa')">▶️ Iniciar / Retomar</button>
+        <button class="btn btn-rejeitar" onclick="campStatus('pausada')">⏸️ Pausar</button>
+      </div>
+      <div id="camp-status-fb" style="font-size:12px;margin-top:10px;text-align:center"></div>
+      <div class="camp-sec">Andamento</div>
+      <div id="camp-contadores" style="display:flex;gap:8px;flex-wrap:wrap"></div>
     </div>
 
   </div>
@@ -3070,6 +3131,140 @@ async function campRecarregar() {
   }
 }
 
+// ── PASSOS, RESUMOS E TRAVA DE DISPARO ──────────────────────────────────────
+// O painel edita um objeto em memória; nada disso existe no servidor até salvar.
+// CAMP_SUJO marca "há edição pendente" — sem esse aviso o operador importa o
+// público, clica em Iniciar e a campanha sobe vazia. Foi o que aconteceu no
+// primeiro teste real.
+var CAMP_SUJO = false;
+
+function campSujo() {
+  CAMP_SUJO = true;
+  var el = document.getElementById('camp-aviso-sujo');
+  if (el) el.style.display = 'block';
+  campResumos();
+}
+function campLimpo() {
+  CAMP_SUJO = false;
+  var el = document.getElementById('camp-aviso-sujo');
+  if (el) el.style.display = 'none';
+  campResumos();
+}
+function campToggle(id) {
+  document.getElementById('passo-' + id).classList.toggle('aberto');
+}
+
+// Resumo de uma linha por passo: dá para conferir tudo sem abrir nada.
+function campResumos() {
+  var c = campAtual(); if (!c) return;
+  var ct = c.contatos || [];
+  var g = c.config || {};
+
+  var fila = ct.filter(function(x){ return x.status === 'fila'; }).length;
+  var txtPub = ct.length
+    ? ct.length + ' contato(s) · ' + fila + ' na fila'
+    : 'Nenhum contato — importe uma lista';
+  campSetPasso('publico', ct.length > 0, txtPub);
+
+  var m = (c.mensagens || [])[0];
+  var nBlocos = (c.mensagens || []).reduce(function(a, x){ return a + (x.blocos||[]).length; }, 0);
+  var vazia = !(c.mensagens||[]).some(function(x){
+    return (x.blocos||[]).some(function(b){
+      return b.tipo === 'imagem' ? !!b.arquivo : !!String(b.conteudo||'').trim();
+    });
+  });
+  var txtMsg = !m ? 'Nenhuma mensagem'
+    : vazia ? (c.mensagens.length + ' mensagem(ns) — conteúdo em branco')
+    : c.mensagens.length + ' mensagem(ns) · ' + nBlocos + ' bloco(s)';
+  campSetPasso('mensagem', !!m && !vazia, txtMsg);
+
+  var jan = (g.janelas || []).map(function(j){ return j[0] + '–' + j[1]; }).join(', ');
+  var txtRitmo = jan
+    ? (Math.round((g.intervaloMinSegundos||0)/60) + '–' + Math.round((g.intervaloMaxSegundos||0)/60)
+       + ' min · até ' + (g.limiteDiario||0) + '/dia · ' + jan
+       + (g.diasUteisApenas ? ' · dias úteis' : ''))
+    : 'Sem janela de horário definida';
+  campSetPasso('ritmo', (g.janelas||[]).length > 0, txtRitmo);
+
+  campChecklist();
+}
+function campSetPasso(id, ok, texto) {
+  var el = document.getElementById('passo-' + id);
+  var rs = document.getElementById('res-' + id);
+  if (el) el.classList.toggle('ok', !!ok);
+  if (rs) rs.textContent = texto;
+}
+
+// O botão de iniciar só libera quando tudo que o worker precisa existe DE FATO
+// no servidor. Campanha ativa sem fila é ativa à toa.
+function campChecklist() {
+  var c = campAtual(); if (!c) return;
+  var ct = c.contatos || [];
+  var fila = ct.filter(function(x){ return x.status === 'fila'; }).length;
+  var g = c.config || {};
+  var temMsg = (c.mensagens||[]).some(function(x){
+    return (x.blocos||[]).some(function(b){
+      return b.tipo === 'imagem' ? !!b.arquivo : !!String(b.conteudo||'').trim();
+    });
+  });
+
+  var itens = [
+    { ok: fila > 0,               txt: fila > 0 ? fila + ' contato(s) na fila' : 'Nenhum contato na fila' },
+    { ok: temMsg,                 txt: temMsg ? 'Mensagem com conteúdo' : 'Mensagem sem conteúdo' },
+    { ok: (g.janelas||[]).length > 0, txt: (g.janelas||[]).length ? 'Janela de horário definida' : 'Sem janela de horário' },
+    { ok: !CAMP_SUJO,             txt: CAMP_SUJO ? 'Há alterações não salvas' : 'Tudo salvo' }
+  ];
+  var pronto = itens.every(function(i){ return i.ok; });
+
+  document.getElementById('camp-check-lista').innerHTML = itens.map(function(i){
+    return '<div class="camp-check' + (i.ok ? ' ok' : '') + '">'
+      + (i.ok ? '<span style="color:#22c55e">✓</span>' : '<span style="color:#f59e0b">•</span>')
+      + ' ' + i.txt + '</div>';
+  }).join('');
+
+  var b = document.getElementById('camp-btn-iniciar');
+  b.disabled = !pronto;
+  b.style.opacity = pronto ? '1' : '.45';
+  b.style.cursor  = pronto ? 'pointer' : 'not-allowed';
+}
+
+// Reaproveita o trabalho de importação sem transformar público em cadastro
+// separado: os contatos vêm zerados, e o histórico de envio continua sendo de
+// cada campanha.
+function campCopiarPublico() {
+  var c = campAtual(); if (!c || !CAMP_DB) return;
+  var outras = CAMP_DB.campanhas.filter(function(x){ return x.id !== c.id && (x.contatos||[]).length; });
+  if (!outras.length) return alert('Nenhuma outra campanha tem público cadastrado.');
+  var lista = outras.map(function(x, i){ return (i+1) + ') ' + x.nome + ' — ' + x.contatos.length + ' contato(s)'; }).join('\n');
+  var esc = prompt('Copiar o público de qual campanha?\n\n' + lista + '\n\nDigite o número:');
+  var idx = Number(esc) - 1;
+  if (!(idx >= 0 && idx < outras.length)) return;
+  var origem = outras[idx];
+  if (!confirm('Copiar ' + origem.contatos.length + ' contato(s) de "' + origem.nome + '"?\n\n'
+    + 'Eles entram zerados (status "fila"), e a lista atual de "' + c.nome + '" ('
+    + (c.contatos||[]).length + ') será substituída.')) return;
+
+  var idsMsg = (c.mensagens||[]).map(function(m){ return m.id; });
+  c.contatos = origem.contatos.map(function(o, n) {
+    var seg = o.segmento || '*';
+    var msg = idsMsg.indexOf(seg) >= 0 ? seg
+      : ((c.mensagens.find(function(m){ return m.segmento === seg; }) || {}).id
+         || (c.mensagens.find(function(m){ return m.segmento === '*'; }) || c.mensagens[0] || {}).id || '');
+    var novo = {};
+    Object.keys(o).forEach(function(k){ novo[k] = o[k]; });
+    novo.id = 'ct-' + String(n + 1).padStart(3, '0');
+    novo.status = 'fila';
+    novo.enviadoEm = null; novo.respondidoEm = null; novo.followupEm = null;
+    novo.erro = null; novo.tentativasEnvio = 0; novo.mensagemId = msg;
+    return novo;
+  });
+  c.variaveis = campVariaveis(c);
+  campRenderContatos();
+  campRenderPrevSel();
+  campSujo();
+  campFb('camp-salvar-fb', c.contatos.length + ' contato(s) copiado(s) — clique em Salvar campanha.', true);
+}
+
 function campAtual() {
   if (!CAMP_DB) return null;
   return CAMP_DB.campanhas.find(function(c){ return c.id === CAMP_ID; }) || null;
@@ -3097,6 +3292,7 @@ function campSelecionar(id) {
   campRenderMensagens(c);
   campRenderContatos();
   campRenderContadores();
+  campLimpo();
 }
 function campRenderContadores() {
   var c = campAtual(); if (!c) return;
@@ -3178,6 +3374,7 @@ async function campSalvar() {
   try {
     await campApi('/campanhas', { method:'POST', body:{ data: CAMP_DB } });
     campFb('camp-salvar-fb', '✓ Salvo.', true);
+    campLimpo();
     campRenderContadores();
   } catch(e) {
     campFb('camp-salvar-fb', 'Erro: ' + e.message);
@@ -3187,6 +3384,7 @@ async function campSalvar() {
 async function campStatus(novo) {
   var c = campAtual(); if (!c) return;
   if (novo === 'ativa') {
+    if (CAMP_SUJO) return campFb('camp-status-fb', 'Salve a campanha antes de iniciar.');
     var fila = (c.contatos||[]).filter(function(x){ return x.status === 'fila'; }).length;
     if (!fila) return campFb('camp-status-fb', 'Não há contatos na fila.');
     if (!confirm('Iniciar "'+c.nome+'"?\n\n'+fila+' contato(s) na fila, até '+c.config.limiteDiario+' por dia.\nQualquer outra campanha ativa será pausada.')) return;
@@ -3249,6 +3447,7 @@ function campMsgMeta() {
   var m = campMsgAtual(); if (!m) return;
   m.nome     = document.getElementById('camp-msg-nome').value;
   m.segmento = document.getElementById('camp-msg-seg').value;
+  campSujo();
 }
 function campNovaMensagem() {
   var c = campAtual(); if (!c) return;
@@ -3259,6 +3458,7 @@ function campNovaMensagem() {
   c.mensagens.push({ id:id, nome:nome, segmento:'*', blocos:[{ tipo:'texto', conteudo:'' }] });
   CAMP_MSG = id;
   campRenderMensagens(c);
+  campSujo();
 }
 
 // Variáveis = tudo que existe no contato menos os campos de controle.
@@ -3318,17 +3518,20 @@ function campRenderBlocos() {
 function campSetBloco(i, campo, valor) {
   var m = campMsgAtual(); if (!m) return;
   m.blocos[Number(i)][campo] = valor;
+  campSujo();
 }
 function campAddBloco(tipo) {
   var m = campMsgAtual(); if (!m) return;
   m.blocos.push(tipo === 'imagem' ? { tipo:'imagem', arquivo:'', legenda:'' } : { tipo:'texto', conteudo:'' });
   campRenderBlocos();
+  campSujo();
 }
 function campRemoverBloco(i) {
   var m = campMsgAtual(); if (!m) return;
   if (m.blocos.length <= 1) return alert('A mensagem precisa de pelo menos um bloco.');
   m.blocos.splice(Number(i), 1);
   campRenderBlocos();
+  campSujo();
 }
 function campMoverBloco(i, dir) {
   var m = campMsgAtual(); if (!m) return;
@@ -3337,6 +3540,7 @@ function campMoverBloco(i, dir) {
   if (j < 0 || j >= m.blocos.length) return;
   var tmp = m.blocos[i]; m.blocos[i] = m.blocos[j]; m.blocos[j] = tmp;
   campRenderBlocos();
+  campSujo();
 }
 async function campUploadImagem(i, input) {
   var f = input.files && input.files[0]; if (!f) return;
@@ -3599,6 +3803,7 @@ function campImportar() {
   CAMP_IMPORT = null;
   campRenderContatos();
   campRenderPrevSel();
+  campSujo();
   campFb('camp-salvar-fb', novos.length + ' contato(s) importado(s) — clique em Salvar campanha.', true);
 }
 
@@ -3624,6 +3829,8 @@ window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('tab-alertas').addEventListener('click', function(){ switchMain('alertas'); });
   document.getElementById('tab-ofertas').addEventListener('click', function(){ switchMain('ofertas'); });
   document.getElementById('tab-campanha').addEventListener('click', function(){ switchMain('campanha'); });
+  var cfgCorpo = document.getElementById('camp-cfg-corpo');
+  ['input','change'].forEach(function(ev){ cfgCorpo.addEventListener(ev, function(){ campSujo(); }); });
   document.getElementById('mt-link').addEventListener('click',   function(){ setMode('link'); });
   document.getElementById('mt-texto').addEventListener('click',  function(){ setMode('texto'); });
   document.getElementById('mt-imagem').addEventListener('click', function(){ setMode('imagem'); });
