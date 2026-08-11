@@ -159,6 +159,36 @@ textarea.out{padding:1.25rem 1.5rem;font-family:'Courier New',monospace;font-siz
 input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(.5);cursor:pointer}
 .sched-clear{background:none;border:1px solid var(--border2);border-radius:6px;color:var(--muted2);font-size:11px;padding:4px 8px;cursor:pointer;white-space:nowrap;font-family:var(--font)}
 .sched-clear:hover{color:var(--text);border-color:var(--muted)}
+
+/* ── TEMA CLARO ──────────────────────────────────────────────────────────
+   Sobrescreve as variaveis no body: tudo que usa var() herda sozinho.
+   Abaixo, so os pontos onde havia cor fixa no CSS ou em style inline. */
+body[data-tema="light"]{
+  --bg:#f2f5fa;--surface:#ffffff;--surface2:#eef2f8;
+  --border:#dbe2ee;--border2:#c3cede;
+  --accent:#d9333a;--accent2:#b8272e;
+  --blue:#0f5fe0;--text:#1a2233;--muted:#5f6f8f;--muted2:#8593ae;
+}
+body[data-tema="light"] .card,
+body[data-tema="light"] .result-card,
+body[data-tema="light"] .img-upload,
+body[data-tema="light"] .ws-bar{box-shadow:0 1px 3px rgba(26,34,51,.06)}
+body[data-tema="light"] .camp-prev{background:#ffffff;border-color:var(--border2);color:#111b21}
+body[data-tema="light"] .st-fila{background:#e3e9f4;color:#4a5878}
+body[data-tema="light"] .st-enviado{background:#dceafd;color:#0b4fc0}
+body[data-tema="light"] .st-respondido{background:#d6f5e3;color:#12783f}
+body[data-tema="light"] .st-erro{background:#fde0e1;color:#b8272e}
+body[data-tema="light"] .st-optout{background:#e8ecf3;color:#6b7a96}
+body[data-tema="light"] .camp-aviso{background:#fdecec;border-color:#f0b7ba;color:#a12127}
+body[data-tema="light"] .btn-aprovar{background:#16a34a;color:#fff}
+body[data-tema="light"] .btn-aprovar:hover{background:#12833c}
+body[data-tema="light"] #btn-limpar-fila,
+body[data-tema="light"] #btn-refresh-ofertas{background:var(--surface2)!important;color:var(--muted)!important;border:1px solid var(--border)}
+body[data-tema="light"] input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:none}
+body[data-tema="light"] textarea.out{color:var(--text)}
+
+.tema-btn{background:var(--surface2);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:var(--font);font-size:11px;font-weight:700;letter-spacing:.5px;padding:6px 14px;cursor:pointer;transition:background .15s,color .15s}
+.tema-btn:hover{background:var(--border);color:var(--text)}
 </style>
 </head>
 <body>
@@ -172,7 +202,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(.5
       <span class="brand-sub">Gerador de Mensagens</span>
     </div>
   </div>
-  <p class="subtitle">Preencha os campos e copie a mensagem pronta para o grupo do WhatsApp.</p>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+    <p class="subtitle" style="margin:0">Preencha os campos e copie a mensagem pronta para o grupo do WhatsApp.</p>
+    <button class="tema-btn" id="tema-btn" onclick="alternarTema()">☀️ Claro</button>
+  </div>
 </header>
 
 
@@ -515,8 +548,18 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(.5
       </div>
 
       <div id="camp-import" style="display:none;margin-bottom:16px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="camp-mini" onclick="campBaixarModelo()">⬇️ Baixar modelo (.csv)</button>
+          <button class="camp-mini" onclick="document.getElementById('camp-file').click()">📄 Enviar arquivo</button>
+          <input type="file" id="camp-file" accept=".csv,.tsv,.txt,text/csv,text/plain" style="display:none" onchange="campLerArquivo(this)"/>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted2);line-height:1.6;margin-bottom:12px">
+          Aceita <b>.csv</b> ou <b>.tsv</b> com a primeira linha de cabeçalho, separador <b>;</b> <b>,</b> ou tabulação.
+          Colunas do modelo: <code>nome · telefone · email · produto · valor · dataFalha · segmento · obs</code>.
+          Só <b>telefone</b> é obrigatório. Qualquer coluna a mais pode virar variável de mensagem no mapeamento.
+        </p>
         <div class="field" style="margin-bottom:10px">
-          <label>Cole da planilha (TSV) ou um CSV <span class="tag">primeira linha = cabeçalho</span></label>
+          <label>Ou cole direto da planilha <span class="tag">Ctrl+C no Sheets/Excel e Ctrl+V aqui</span></label>
           <textarea id="camp-import-txt" style="min-height:120px;font-family:'Courier New',monospace;font-size:12px" placeholder="nome&#9;telefone&#9;email&#9;produto..."></textarea>
         </div>
         <button class="camp-mini" onclick="campAnalisarImport()">Analisar colunas</button>
@@ -3366,18 +3409,68 @@ function campToggleImport() {
   var el = document.getElementById('camp-import');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
-function campSplitLinha(l) {
-  if (l.indexOf('\t') >= 0) return l.split('\t');
-  if (l.indexOf(';') >= 0)  return l.split(';');
-  return l.split(',');
+// Detecta o separador pela linha de cabecalho e respeita aspas: nome com
+// virgula dentro ("Silva, Joao") quebrava a coluna no split cru.
+function campSeparador(cab) {
+  if (cab.indexOf('\t') >= 0) return '\t';
+  if (cab.indexOf(';')  >= 0) return ';';
+  return ',';
+}
+function campSplitLinha(l, sep) {
+  sep = sep || campSeparador(l);
+  var out = [], atual = '', aspas = false;
+  for (var i = 0; i < l.length; i++) {
+    var ch = l[i];
+    if (ch === '"') {
+      if (aspas && l[i+1] === '"') { atual += '"'; i++; }
+      else aspas = !aspas;
+    } else if (ch === sep && !aspas) {
+      out.push(atual); atual = '';
+    } else atual += ch;
+  }
+  out.push(atual);
+  return out;
+}
+
+// ── Modelo padrao do arquivo de publico ──────────────────────────────────────
+// Separador ';' e BOM UTF-8: e o que o Excel em portugues abre em colunas e com
+// acento certo sem o operador precisar mexer em nada.
+var CAMP_MODELO_COLS = ['nome','telefone','email','produto','valor','dataFalha','segmento','obs'];
+function campBaixarModelo() {
+  var linhas = [
+    CAMP_MODELO_COLS.join(';'),
+    'Maria Aparecida Souza;5531988887777;maria@exemplo.com;Clube do Viajante;297;07/01/2026;cartao;',
+    'Joao Pedro Lima;31977776666;joao@exemplo.com;Clube do Viajante;297;22/02/2026;pix;cliente antigo'
+  ];
+  var blob = new Blob(['\ufeff' + linhas.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'modelo-publico-campanha.csv';
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+}
+function campLerArquivo(input) {
+  var f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  if (f.size > 2 * 1024 * 1024) return alert('Arquivo acima de 2MB.');
+  var r = new FileReader();
+  r.onload = function() {
+    // Remove BOM: sobrevive ao Excel e viraria parte do nome da primeira coluna
+    document.getElementById('camp-import-txt').value = String(r.result || '').replace(/^\ufeff/, '');
+    campAnalisarImport();
+  };
+  r.onerror = function(){ alert('Falha ao ler o arquivo.'); };
+  r.readAsText(f, 'utf-8');
 }
 function campAnalisarImport() {
   var txt = (document.getElementById('camp-import-txt').value || '').trim();
   if (!txt) return alert('Cole os dados primeiro.');
   var linhas = txt.split(/\r?\n/).filter(function(l){ return l.trim(); });
   if (linhas.length < 2) return alert('Precisa de cabeçalho + ao menos uma linha.');
-  var cab = campSplitLinha(linhas[0]).map(function(x){ return x.trim(); });
-  CAMP_IMPORT = { cab: cab, linhas: linhas.slice(1).map(campSplitLinha) };
+  var sep = campSeparador(linhas[0]);
+  var cab = campSplitLinha(linhas[0], sep).map(function(x){ return x.trim(); });
+  CAMP_IMPORT = { cab: cab, linhas: linhas.slice(1).map(function(l){ return campSplitLinha(l, sep); }) };
   // Palpite de mapeamento pelo nome da coluna — o operador confere e corrige
   var palpite = function(h) {
     h = h.toLowerCase();
@@ -3493,8 +3586,22 @@ function campImportar() {
   campFb('camp-salvar-fb', novos.length + ' contato(s) importado(s) — clique em Salvar campanha.', true);
 }
 
+// ══ TEMA ══
+function aplicarTema(t) {
+  document.body.setAttribute('data-tema', t);
+  var b = document.getElementById('tema-btn');
+  if (b) b.textContent = t === 'light' ? '🌙 Escuro' : '☀️ Claro';
+  try { localStorage.setItem('cdv_gerador_tema', t); } catch(e) {}
+}
+function alternarTema() {
+  aplicarTema(document.body.getAttribute('data-tema') === 'light' ? 'dark' : 'light');
+}
+
 // ══ INIT ══
 window.addEventListener('DOMContentLoaded', function() {
+  var temaSalvo = 'dark';
+  try { temaSalvo = localStorage.getItem('cdv_gerador_tema') || 'dark'; } catch(e) {}
+  aplicarTema(temaSalvo);
   carregarHistoricoTransferencias();
   document.getElementById('tab-oferta').addEventListener('click', function(){ switchMain('oferta'); });
   document.getElementById('tab-milhas').addEventListener('click', function(){ switchMain('milhas'); });
