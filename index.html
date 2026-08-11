@@ -443,6 +443,7 @@ body[data-tema="light"] textarea.out{color:var(--text)}
           <label>Campanha</label>
           <select id="camp-sel" onchange="campSelecionar(this.value)"></select>
         </div>
+        <button class="camp-mini" style="padding:10px 14px" onclick="campRecarregar()">↻</button>
         <button class="camp-mini" style="padding:10px 14px" onclick="campNova()">+ Nova</button>
       </div>
       <div id="camp-contadores" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
@@ -3051,6 +3052,21 @@ async function campCarregar() {
     document.getElementById('camp-gate').style.display = 'block';
     document.getElementById('camp-app').style.display  = 'none';
     campFb('camp-gate-fb', 'Falha ao carregar: ' + e.message);
+  }
+}
+
+// Recarrega do servidor. Durante uma campanha rodando, o painel na tela e uma
+// foto do momento em que abriu: quem manda no status e o worker.
+async function campRecarregar() {
+  var manter = CAMP_ID;
+  try {
+    var d = await campApi('/campanhas');
+    CAMP_DB = d.data;
+    CAMP_ID = manter;
+    campRenderSeletor();
+    campFb('camp-status-fb', '✓ Atualizado.', true);
+  } catch(e) {
+    campFb('camp-status-fb', 'Erro ao atualizar: ' + e.message);
   }
 }
 
