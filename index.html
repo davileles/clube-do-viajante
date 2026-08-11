@@ -76,6 +76,25 @@ textarea.out{padding:1.25rem 1.5rem;font-family:'Courier New',monospace;font-siz
 .main-tab.active{background:var(--accent);color:#fff}
 .main-tab:not(.active):hover{color:var(--text)}
 .main-panel{display:none}
+.camp-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;background:var(--surface2);border:1px solid var(--border);color:var(--muted)}
+.camp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.camp-sec{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted2);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.camp-sec:first-child{margin-top:0}
+.camp-bloco{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px}
+.camp-bloco-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.camp-mini{background:var(--surface);border:1px solid var(--border2);color:var(--muted);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:var(--font)}
+.camp-mini:hover{background:var(--border);color:var(--text)}
+.camp-tab{width:100%;border-collapse:collapse;font-size:12px}
+.camp-tab th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2);font-weight:800;padding:6px 8px;border-bottom:1px solid var(--border)}
+.camp-tab td{padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text)}
+.camp-st{font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px}
+.st-fila{background:#3d4a66;color:#b9c7e2}
+.st-enviado{background:#126eff33;color:#7db0ff}
+.st-respondido{background:#22c55e33;color:#6ee7a0}
+.st-erro{background:#ff585e33;color:#ff9a9d}
+.st-optout{background:#8a9bbf33;color:#8a9bbf}
+.camp-prev{background:#0b141a;border:1px solid var(--border);border-radius:10px;padding:14px;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.55;color:#e9edef}
+.camp-aviso{background:#ff585e1a;border:1px solid #ff585e55;border-radius:10px;padding:10px 12px;font-size:12px;color:#ffb3b5;margin-bottom:12px}
 .main-panel.active{display:block}
 .mode-tabs{display:flex;gap:4px;margin-bottom:14px}
 .mode-tab{flex:1;padding:8px 6px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:var(--font);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-radius:8px;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
@@ -168,6 +187,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(.5
   <button class="main-tab" id="tab-milhas">🎟️ Emissão</button>
   <button class="main-tab" id="tab-alertas">🔔 Alertas<span class="alerta-badge" id="alertas-badge" style="display:none">0</span></button>
   <button class="main-tab" id="tab-ofertas">📡 Aprovar Ofertas<span class="alerta-badge" id="ofertas-badge" style="display:none">0</span></button>
+  <button class="main-tab" id="tab-campanha">📣 Campanha</button>
 </div>
 
 <!-- ══ PAINEL OFERTA ══ -->
@@ -366,6 +386,152 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(.5
   <div id="ofertas-lista"></div>
 </div>
 
+<!-- ══ PAINEL CAMPANHA ══ -->
+<div class="main-panel" id="panel-campanha">
+
+  <!-- Gate de operador -->
+  <div class="card" id="camp-gate">
+    <p class="badge-hint">🔐 Acesso restrito</p>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px">A base de campanhas tem telefone e e-mail de gente real e esta página é pública. Informe a chave de operador (variável <code>CAMPANHAS_KEY</code> do Railway).</p>
+    <div class="field" style="margin-bottom:10px">
+      <label>Chave de operador</label>
+      <input type="password" id="camp-key" placeholder="••••••••" autocomplete="off"/>
+    </div>
+    <button class="btn btn-blue" onclick="campDestravar()">Destravar</button>
+    <div id="camp-gate-fb" style="font-size:12px;margin-top:10px;text-align:center"></div>
+  </div>
+
+  <div id="camp-app" style="display:none">
+
+    <!-- Seletor + controle -->
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:12px">
+        <div class="field" style="flex:1">
+          <label>Campanha</label>
+          <select id="camp-sel" onchange="campSelecionar(this.value)"></select>
+        </div>
+        <button class="camp-mini" style="padding:10px 14px" onclick="campNova()">+ Nova</button>
+      </div>
+      <div id="camp-contadores" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-aprovar" onclick="campStatus('ativa')">▶️ Iniciar / Retomar</button>
+        <button class="btn btn-rejeitar" onclick="campStatus('pausada')">⏸️ Pausar</button>
+      </div>
+      <div id="camp-status-fb" style="font-size:12px;margin-top:10px;text-align:center"></div>
+    </div>
+
+    <!-- Configuração -->
+    <div class="card">
+      <div class="camp-sec">Ritmo de envio</div>
+      <div class="camp-grid">
+        <div class="field"><label>Intervalo mínimo <span class="tag">min</span></label><input type="number" id="cfg-int-min" min="1"/></div>
+        <div class="field"><label>Intervalo máximo <span class="tag">min</span></label><input type="number" id="cfg-int-max" min="1"/></div>
+        <div class="field"><label>Teto diário <span class="tag">máx. 25</span></label><input type="number" id="cfg-diario" min="1" max="25"/></div>
+        <div class="field"><label>Pausa longa a cada <span class="tag">envios</span></label><input type="number" id="cfg-pausa-cada" min="0"/></div>
+        <div class="field"><label>Pausa longa mín <span class="tag">min</span></label><input type="number" id="cfg-pausa-min" min="0"/></div>
+        <div class="field"><label>Pausa longa máx <span class="tag">min</span></label><input type="number" id="cfg-pausa-max" min="0"/></div>
+        <div class="field"><label>Delay entre blocos mín <span class="tag">s</span></label><input type="number" id="cfg-delay-min" min="0"/></div>
+        <div class="field"><label>Delay entre blocos máx <span class="tag">s</span></label><input type="number" id="cfg-delay-max" min="0"/></div>
+      </div>
+
+      <div class="camp-sec">Janela de disparo</div>
+      <div class="field" style="margin-bottom:12px">
+        <label>Horários <span class="tag">um por linha, formato 09:00-11:30</span></label>
+        <textarea id="cfg-janelas" style="min-height:64px;font-family:'Courier New',monospace;font-size:13px"></textarea>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:var(--text);cursor:pointer">
+        <input type="checkbox" id="cfg-uteis" style="width:auto"/> Somente dias úteis
+      </label>
+
+      <div class="camp-sec">Segurança</div>
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:var(--muted);margin-bottom:12px">
+        <input type="checkbox" id="cfg-verificar" checked disabled style="width:auto"/> Verificar número no WhatsApp antes de enviar <span class="tag">(travado)</span>
+      </label>
+      <div class="field" style="margin-bottom:12px">
+        <label>Parar após N erros seguidos</label>
+        <input type="number" id="cfg-erros" min="1"/>
+      </div>
+
+      <div class="camp-sec">Follow-up</div>
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;color:var(--text);margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="cfg-fup-ativo" style="width:auto"/> Enviar follow-up para quem não respondeu
+      </label>
+      <div class="camp-grid">
+        <div class="field"><label>Depois de <span class="tag">dias</span></label><input type="number" id="cfg-fup-dias" min="1"/></div>
+        <div class="field"><label>Com a mensagem</label><select id="cfg-fup-msg"></select></div>
+      </div>
+
+      <button class="btn btn-gerar" style="margin-top:18px" onclick="campSalvar()">💾 Salvar campanha</button>
+      <div id="camp-salvar-fb" style="font-size:12px;margin-top:10px;text-align:center"></div>
+    </div>
+
+    <!-- Mensagens -->
+    <div class="card">
+      <div class="camp-sec">Mensagens</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px">
+        <div class="field" style="flex:1">
+          <label>Editando</label>
+          <select id="camp-msg-sel" onchange="campRenderBlocos()"></select>
+        </div>
+        <button class="camp-mini" style="padding:10px 14px" onclick="campNovaMensagem()">+ Nova</button>
+      </div>
+      <div class="camp-grid" style="margin-bottom:14px">
+        <div class="field"><label>Nome</label><input type="text" id="camp-msg-nome" oninput="campMsgMeta()"/></div>
+        <div class="field"><label>Segmento <span class="tag">* = todos</span></label><input type="text" id="camp-msg-seg" oninput="campMsgMeta()"/></div>
+      </div>
+
+      <div id="camp-blocos"></div>
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        <button class="camp-mini" onclick="campAddBloco('texto')">+ Bloco de texto</button>
+        <button class="camp-mini" onclick="campAddBloco('imagem')">+ Bloco de imagem</button>
+      </div>
+
+      <div class="camp-sec">Prévia com contato real</div>
+      <div class="field" style="margin-bottom:12px">
+        <label>Contato</label>
+        <select id="camp-prev-sel" onchange="campRenderPreview()"></select>
+      </div>
+      <div id="camp-preview"></div>
+      <button class="camp-mini" style="margin-top:10px" onclick="campRenderPreview()">🎲 Sortear spintax de novo</button>
+    </div>
+
+    <!-- Contatos -->
+    <div class="card">
+      <div class="camp-sec">Público</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:12px">
+        <div class="field" style="flex:1">
+          <label>Filtrar por status</label>
+          <select id="camp-filtro" onchange="campRenderContatos()">
+            <option value="">Todos</option>
+            <option value="fila">Na fila</option>
+            <option value="enviado">Enviados</option>
+            <option value="respondido">Respondidos</option>
+            <option value="erro">Erros</option>
+            <option value="optout">Opt-out</option>
+          </select>
+        </div>
+        <button class="camp-mini" style="padding:10px 14px" onclick="campToggleImport()">📥 Importar público</button>
+      </div>
+
+      <div id="camp-import" style="display:none;margin-bottom:16px">
+        <div class="field" style="margin-bottom:10px">
+          <label>Cole da planilha (TSV) ou um CSV <span class="tag">primeira linha = cabeçalho</span></label>
+          <textarea id="camp-import-txt" style="min-height:120px;font-family:'Courier New',monospace;font-size:12px" placeholder="nome&#9;telefone&#9;email&#9;produto..."></textarea>
+        </div>
+        <button class="camp-mini" onclick="campAnalisarImport()">Analisar colunas</button>
+        <div id="camp-map" style="display:none;margin-top:14px"></div>
+      </div>
+
+      <div style="overflow-x:auto">
+        <table class="camp-tab"><thead><tr>
+          <th>Nome</th><th>Telefone</th><th>Segmento</th><th>Mensagem</th><th>Status</th><th>Enviado</th>
+        </tr></thead><tbody id="camp-contatos"></tbody></table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 </div>
 <script>
 // ══ CONSTANTES ══
@@ -502,12 +668,13 @@ document.getElementById('logo-img').src = "data:image/png;base64,/9j/4AAQSkZJRgA
 
 // ══ TABS ══
 function switchMain(name) {
-  ['oferta','milhas','alertas','ofertas'].forEach(function(id) {
+  ['oferta','milhas','alertas','ofertas','campanha'].forEach(function(id) {
     document.getElementById('tab-'+id).classList.toggle('active', id===name);
     document.getElementById('panel-'+id).classList.toggle('active', id===name);
   });
   if (name === 'alertas') carregarAlertas();
   if (name === 'ofertas') carregarOfertasPendentes();
+  if (name === 'campanha') campAoAbrir();
 }
 
 function setMode(m) {
@@ -2760,6 +2927,501 @@ async function enviarWA(msgId,statusId,fileKey) {
   } catch(e){s.style.color='#ff585e';s.textContent='Sem resposta.';setTimeout(function(){s.textContent='';},4000);}
 }
 
+// ══ CAMPANHAS ══
+// A chave de operador fica só em sessionStorage: some ao fechar a aba, e nunca
+// entra no repositório. Sem ela o painel não carrega nada.
+var CAMP_KEY = '';
+var CAMP_DB  = null;   // { versao, campanhas: [] }
+var CAMP_ID  = null;   // id da campanha selecionada
+var CAMP_MSG = null;   // id da mensagem em edição
+var CAMP_IMPORT = null;
+
+var CAMP_TETO_DIARIO = 25;   // trava dura: num dia de pressa é fácil subir para 200
+var CAMP_CAMPOS_IMPORT = [
+  ['nome','Nome completo'], ['telefone','Telefone'], ['email','E-mail'],
+  ['produto','Produto'], ['valor','Valor'], ['dataFalha','Data da falha'],
+  ['segmento','Segmento'], ['obs','Observação'], ['','— ignorar —']
+];
+
+function campHead() {
+  return { 'Content-Type':'application/json', 'X-CDV-Op': CAMP_KEY };
+}
+async function campApi(rota, opts) {
+  opts = opts || {};
+  var r = await fetch(CDV_PROXY + rota, {
+    method:  opts.method || 'GET',
+    headers: campHead(),
+    body:    opts.body ? JSON.stringify(opts.body) : undefined,
+    cache:   'no-cache'
+  });
+  var d = await r.json().catch(function(){ return {}; });
+  if (!r.ok) throw new Error(d.erro || ('status ' + r.status));
+  return d;
+}
+function campFb(id, msg, ok) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.color = ok ? '#4ade80' : '#ff585e';
+  el.textContent = msg;
+  if (msg) setTimeout(function(){ if (el.textContent === msg) el.textContent = ''; }, 5000);
+}
+
+// ── Gate ─────────────────────────────────────────────────────────────────────
+function campAoAbrir() {
+  if (CAMP_KEY) return;
+  var salva = '';
+  try { salva = sessionStorage.getItem('cdv_camp_key') || ''; } catch(e) {}
+  if (salva) { CAMP_KEY = salva; campCarregar(); }
+}
+async function campDestravar() {
+  CAMP_KEY = (document.getElementById('camp-key').value || '').trim();
+  if (!CAMP_KEY) return campFb('camp-gate-fb', 'Informe a chave.');
+  campFb('camp-gate-fb', 'Verificando...', true);
+  try {
+    await campApi('/campanhas');
+    try { sessionStorage.setItem('cdv_camp_key', CAMP_KEY); } catch(e) {}
+    campFb('camp-gate-fb', '');
+    campCarregar();
+  } catch(e) {
+    CAMP_KEY = '';
+    campFb('camp-gate-fb', /503|CAMPANHAS_KEY/.test(e.message)
+      ? 'CAMPANHAS_KEY não está configurada no Railway.'
+      : 'Chave inválida.');
+  }
+}
+
+async function campCarregar() {
+  try {
+    var d = await campApi('/campanhas');
+    CAMP_DB = d.data;
+    document.getElementById('camp-gate').style.display = 'none';
+    document.getElementById('camp-app').style.display  = 'block';
+    campRenderSeletor();
+  } catch(e) {
+    CAMP_KEY = '';
+    try { sessionStorage.removeItem('cdv_camp_key'); } catch(e2) {}
+    document.getElementById('camp-gate').style.display = 'block';
+    document.getElementById('camp-app').style.display  = 'none';
+    campFb('camp-gate-fb', 'Falha ao carregar: ' + e.message);
+  }
+}
+
+function campAtual() {
+  if (!CAMP_DB) return null;
+  return CAMP_DB.campanhas.find(function(c){ return c.id === CAMP_ID; }) || null;
+}
+
+// ── Seletor e contadores ─────────────────────────────────────────────────────
+function campRenderSeletor() {
+  var sel = document.getElementById('camp-sel');
+  var lista = CAMP_DB.campanhas.slice().sort(function(a,b){
+    return String(a.nome).localeCompare(String(b.nome), 'pt-BR');
+  });
+  sel.innerHTML = lista.map(function(c){
+    return '<option value="'+c.id+'">'+c.nome+' — '+c.status+'</option>';
+  }).join('');
+  if (!CAMP_ID || !campAtual()) CAMP_ID = lista.length ? lista[0].id : null;
+  sel.value = CAMP_ID || '';
+  campSelecionar(CAMP_ID);
+}
+function campSelecionar(id) {
+  CAMP_ID  = id;
+  CAMP_MSG = null;
+  var c = campAtual();
+  if (!c) return;
+  campRenderConfig(c);
+  campRenderMensagens(c);
+  campRenderContatos();
+  campRenderContadores();
+}
+function campRenderContadores() {
+  var c = campAtual(); if (!c) return;
+  var ct = c.contatos || [];
+  var por = { fila:0, enviado:0, respondido:0, erro:0, optout:0 };
+  ct.forEach(function(x){ if (por[x.status] !== undefined) por[x.status]++; });
+  var dias = c.config.limiteDiario ? Math.ceil(por.fila / c.config.limiteDiario) : 0;
+  document.getElementById('camp-contadores').innerHTML =
+    '<span class="camp-pill">Status: <b style="color:var(--text)">'+c.status+'</b></span>' +
+    '<span class="camp-pill">Na fila: <b style="color:var(--text)">'+por.fila+'</b></span>' +
+    '<span class="camp-pill">Enviados: <b style="color:#7db0ff">'+por.enviado+'</b></span>' +
+    '<span class="camp-pill">Respondidos: <b style="color:#6ee7a0">'+por.respondido+'</b></span>' +
+    '<span class="camp-pill">Erros: <b style="color:#ff9a9d">'+por.erro+'</b></span>' +
+    (dias ? '<span class="camp-pill">≈ '+dias+' dia(s) de disparo</span>' : '');
+}
+
+// ── Configuração ─────────────────────────────────────────────────────────────
+function campRenderConfig(c) {
+  var g = c.config || {};
+  var v = function(id, val){ document.getElementById(id).value = val; };
+  v('cfg-int-min',   Math.round((g.intervaloMinSegundos||180)/60));
+  v('cfg-int-max',   Math.round((g.intervaloMaxSegundos||480)/60));
+  v('cfg-diario',    g.limiteDiario || 15);
+  v('cfg-pausa-cada',g.pausaLongaACada || 0);
+  v('cfg-pausa-min', (g.pausaLongaMinutos||[20,30])[0]);
+  v('cfg-pausa-max', (g.pausaLongaMinutos||[20,30])[1]);
+  v('cfg-delay-min', (g.delayEntreMensagensSegundos||[20,40])[0]);
+  v('cfg-delay-max', (g.delayEntreMensagensSegundos||[20,40])[1]);
+  v('cfg-erros',     g.pararSeErrosSeguidos || 3);
+  v('cfg-janelas',   (g.janelas||[]).map(function(j){ return j[0]+'-'+j[1]; }).join('\n'));
+  document.getElementById('cfg-uteis').checked     = !!g.diasUteisApenas;
+  document.getElementById('cfg-fup-ativo').checked = !!(g.followup && g.followup.ativo);
+  v('cfg-fup-dias',  (g.followup && g.followup.aposDias) || 3);
+  var fup = document.getElementById('cfg-fup-msg');
+  fup.innerHTML = (c.mensagens||[]).slice().sort(function(a,b){
+    return String(a.nome).localeCompare(String(b.nome),'pt-BR');
+  }).map(function(m){ return '<option value="'+m.id+'">'+m.nome+'</option>'; }).join('');
+  fup.value = (g.followup && g.followup.variante) || '';
+}
+
+function campColetarConfig(c) {
+  var n = function(id){ return Number(document.getElementById(id).value) || 0; };
+  var janelas = (document.getElementById('cfg-janelas').value || '')
+    .split('\n').map(function(l){ return l.trim(); }).filter(Boolean)
+    .map(function(l){ return l.split('-').map(function(x){ return x.trim(); }); })
+    .filter(function(j){ return j.length === 2 && /^\d{1,2}:\d{2}$/.test(j[0]) && /^\d{1,2}:\d{2}$/.test(j[1]); });
+
+  var diario = Math.min(n('cfg-diario') || 15, CAMP_TETO_DIARIO);
+  document.getElementById('cfg-diario').value = diario;
+
+  c.config = {
+    intervaloMinSegundos: Math.max(60, n('cfg-int-min') * 60),
+    intervaloMaxSegundos: Math.max(60, n('cfg-int-max') * 60),
+    limiteDiario: diario,
+    janelas: janelas,
+    diasUteisApenas: document.getElementById('cfg-uteis').checked,
+    pausaLongaACada: n('cfg-pausa-cada'),
+    pausaLongaMinutos: [n('cfg-pausa-min'), n('cfg-pausa-max')],
+    delayEntreMensagensSegundos: [n('cfg-delay-min'), n('cfg-delay-max')],
+    // Nunca sai do painel desligado: número inválido vira erro antes de gastar envio.
+    verificarNumeroAntes: true,
+    pararSeErrosSeguidos: Math.max(1, n('cfg-erros')),
+    followup: {
+      ativo:    document.getElementById('cfg-fup-ativo').checked,
+      aposDias: Math.max(1, n('cfg-fup-dias')),
+      variante: document.getElementById('cfg-fup-msg').value || ''
+    }
+  };
+  if (c.config.intervaloMaxSegundos < c.config.intervaloMinSegundos) {
+    c.config.intervaloMaxSegundos = c.config.intervaloMinSegundos;
+  }
+  return janelas.length > 0;
+}
+
+async function campSalvar() {
+  var c = campAtual(); if (!c) return;
+  var ok = campColetarConfig(c);
+  if (!ok) return campFb('camp-salvar-fb', 'Defina ao menos uma janela de horário válida (ex: 09:00-11:30).');
+  try {
+    await campApi('/campanhas', { method:'POST', body:{ data: CAMP_DB } });
+    campFb('camp-salvar-fb', '✓ Salvo.', true);
+    campRenderContadores();
+  } catch(e) {
+    campFb('camp-salvar-fb', 'Erro: ' + e.message);
+  }
+}
+
+async function campStatus(novo) {
+  var c = campAtual(); if (!c) return;
+  if (novo === 'ativa') {
+    var fila = (c.contatos||[]).filter(function(x){ return x.status === 'fila'; }).length;
+    if (!fila) return campFb('camp-status-fb', 'Não há contatos na fila.');
+    if (!confirm('Iniciar "'+c.nome+'"?\n\n'+fila+' contato(s) na fila, até '+c.config.limiteDiario+' por dia.\nQualquer outra campanha ativa será pausada.')) return;
+  }
+  try {
+    var d = await campApi('/campanhas/status', { method:'POST', body:{ campanhaId: c.id, status: novo } });
+    c.status = d.status;
+    campFb('camp-status-fb', '✓ Campanha ' + d.status + '.', true);
+    campRenderSeletor();
+  } catch(e) {
+    campFb('camp-status-fb', 'Erro: ' + e.message);
+  }
+}
+
+function campNova() {
+  var nome = prompt('Nome da nova campanha:');
+  if (!nome) return;
+  var base = campAtual();
+  var id = nome.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+              .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40);
+  if (CAMP_DB.campanhas.some(function(c){ return c.id === id; })) return alert('Já existe campanha com esse id.');
+  CAMP_DB.campanhas.push({
+    id: id, nome: nome, descricao: '', criadoEm: new Date().toISOString().slice(0,10),
+    status: 'rascunho',
+    config: base ? JSON.parse(JSON.stringify(base.config)) : {
+      intervaloMinSegundos:180, intervaloMaxSegundos:480, limiteDiario:15,
+      janelas:[['09:00','11:30'],['14:00','18:00']], diasUteisApenas:true,
+      pausaLongaACada:6, pausaLongaMinutos:[20,30], delayEntreMensagensSegundos:[20,40],
+      verificarNumeroAntes:true, pararSeErrosSeguidos:3,
+      followup:{ ativo:false, aposDias:3, variante:'' }
+    },
+    mensagens: [{ id:'padrao', nome:'Mensagem padrão', segmento:'*', blocos:[{ tipo:'texto', conteudo:'Oi, {primeiroNome}.' }] }],
+    variaveis: ['primeiroNome','nome'],
+    contatos: []
+  });
+  CAMP_ID = id;
+  campRenderSeletor();
+}
+
+// ── Mensagens e blocos ───────────────────────────────────────────────────────
+function campRenderMensagens(c) {
+  var sel = document.getElementById('camp-msg-sel');
+  var lista = (c.mensagens||[]).slice().sort(function(a,b){
+    return String(a.nome).localeCompare(String(b.nome),'pt-BR');
+  });
+  sel.innerHTML = lista.map(function(m){ return '<option value="'+m.id+'">'+m.nome+'</option>'; }).join('');
+  if (!CAMP_MSG || !lista.some(function(m){ return m.id === CAMP_MSG; })) {
+    CAMP_MSG = lista.length ? lista[0].id : null;
+  }
+  sel.value = CAMP_MSG || '';
+  campRenderPrevSel();
+  campRenderBlocos();
+}
+function campMsgAtual() {
+  var c = campAtual(); if (!c) return null;
+  CAMP_MSG = document.getElementById('camp-msg-sel').value || CAMP_MSG;
+  return (c.mensagens||[]).find(function(m){ return m.id === CAMP_MSG; }) || null;
+}
+function campMsgMeta() {
+  var m = campMsgAtual(); if (!m) return;
+  m.nome     = document.getElementById('camp-msg-nome').value;
+  m.segmento = document.getElementById('camp-msg-seg').value;
+}
+function campNovaMensagem() {
+  var c = campAtual(); if (!c) return;
+  var nome = prompt('Nome da mensagem:'); if (!nome) return;
+  var id = nome.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+             .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30);
+  if (c.mensagens.some(function(m){ return m.id === id; })) return alert('Já existe mensagem com esse id.');
+  c.mensagens.push({ id:id, nome:nome, segmento:'*', blocos:[{ tipo:'texto', conteudo:'' }] });
+  CAMP_MSG = id;
+  campRenderMensagens(c);
+}
+
+function campRenderBlocos() {
+  var m = campMsgAtual();
+  var wrap = document.getElementById('camp-blocos');
+  if (!m) { wrap.innerHTML = ''; return; }
+  document.getElementById('camp-msg-nome').value = m.nome || '';
+  document.getElementById('camp-msg-seg').value  = m.segmento || '*';
+  wrap.innerHTML = (m.blocos||[]).map(function(b, i) {
+    var topo = '<div class="camp-bloco-top"><span style="font-size:10px;font-weight:800;letter-spacing:1px;color:var(--muted2)">'
+      + (b.tipo === 'imagem' ? '🖼️ IMAGEM' : '💬 TEXTO') + ' · BLOCO ' + (i+1) + '</span><span>'
+      + '<button class="camp-mini" data-i="'+i+'" onclick="campMoverBloco(this.dataset.i,-1)">↑</button> '
+      + '<button class="camp-mini" data-i="'+i+'" onclick="campMoverBloco(this.dataset.i,1)">↓</button> '
+      + '<button class="camp-mini" data-i="'+i+'" onclick="campRemoverBloco(this.dataset.i)">✕</button></span></div>';
+    if (b.tipo === 'imagem') {
+      return '<div class="camp-bloco">' + topo
+        + '<div class="field" style="margin-bottom:8px"><label>Arquivo</label>'
+        + '<input type="text" data-i="'+i+'" value="'+(b.arquivo||'').replace(/"/g,'&quot;')+'" oninput="campSetBloco(this.dataset.i,\'arquivo\',this.value)" placeholder="painel-demo-1.png"/></div>'
+        + '<input type="file" accept="image/png,image/jpeg,image/webp" data-i="'+i+'" style="font-size:12px;padding:6px" onchange="campUploadImagem(this.dataset.i, this)"/>'
+        + '<div class="field" style="margin-top:8px"><label>Legenda <span class="tag">opcional</span></label>'
+        + '<input type="text" data-i="'+i+'" value="'+(b.legenda||'').replace(/"/g,'&quot;')+'" oninput="campSetBloco(this.dataset.i,\'legenda\',this.value)"/></div>'
+        + '</div>';
+    }
+    return '<div class="camp-bloco">' + topo
+      + '<textarea data-i="'+i+'" style="min-height:150px" oninput="campSetBloco(this.dataset.i,\'conteudo\',this.value)">'
+      + (b.conteudo||'').replace(/</g,'&lt;') + '</textarea></div>';
+  }).join('');
+}
+function campSetBloco(i, campo, valor) {
+  var m = campMsgAtual(); if (!m) return;
+  m.blocos[Number(i)][campo] = valor;
+}
+function campAddBloco(tipo) {
+  var m = campMsgAtual(); if (!m) return;
+  m.blocos.push(tipo === 'imagem' ? { tipo:'imagem', arquivo:'', legenda:'' } : { tipo:'texto', conteudo:'' });
+  campRenderBlocos();
+}
+function campRemoverBloco(i) {
+  var m = campMsgAtual(); if (!m) return;
+  if (m.blocos.length <= 1) return alert('A mensagem precisa de pelo menos um bloco.');
+  m.blocos.splice(Number(i), 1);
+  campRenderBlocos();
+}
+function campMoverBloco(i, dir) {
+  var m = campMsgAtual(); if (!m) return;
+  i = Number(i);
+  var j = i + Number(dir);
+  if (j < 0 || j >= m.blocos.length) return;
+  var tmp = m.blocos[i]; m.blocos[i] = m.blocos[j]; m.blocos[j] = tmp;
+  campRenderBlocos();
+}
+async function campUploadImagem(i, input) {
+  var f = input.files && input.files[0]; if (!f) return;
+  var b64 = await new Promise(function(res, rej) {
+    var r = new FileReader();
+    r.onload  = function(){ res(String(r.result).split(',')[1]); };
+    r.onerror = function(){ rej(new Error('falha ao ler o arquivo')); };
+    r.readAsDataURL(f);
+  });
+  try {
+    var d = await campApi('/campanhas/midia', { method:'POST', body:{ arquivo: f.name, base64: b64 } });
+    campSetBloco(i, 'arquivo', d.arquivo);
+    campRenderBlocos();
+    campFb('camp-salvar-fb', '✓ Imagem enviada: ' + d.arquivo + '. Salve a campanha.', true);
+  } catch(e) {
+    alert('Erro no upload: ' + e.message);
+  }
+}
+
+// ── Resolução de variáveis e spintax ─────────────────────────────────────────
+// Mesma regra que o worker do baileys vai aplicar no envio:
+// 1. {rotulo|opção A|opção B} sorteia entre as opções (o primeiro pedaço, se for
+//    um identificador simples e houver 2+ alternativas, é só rótulo e sai fora);
+// 2. {campo} vira o valor do contato — qualquer campo novo vira variável sozinho.
+function campResolver(txt, ct) {
+  var t = String(txt || '');
+  t = t.replace(/\{([^{}]*\|[^{}]*)\}/g, function(_, g) {
+    var partes = g.split('|');
+    if (partes.length > 2 && /^[a-zA-Z0-9_]+$/.test(partes[0].trim())) partes = partes.slice(1);
+    return partes[Math.floor(Math.random() * partes.length)];
+  });
+  t = t.replace(/\{([a-zA-Z0-9_]+)\}/g, function(m, k) {
+    return (ct && ct[k] !== undefined && ct[k] !== null && ct[k] !== '') ? String(ct[k]) : m;
+  });
+  return t;
+}
+
+function campRenderPrevSel() {
+  var c = campAtual(); if (!c) return;
+  var sel = document.getElementById('camp-prev-sel');
+  var lista = (c.contatos||[]).slice().sort(function(a,b){
+    return String(a.nome).localeCompare(String(b.nome),'pt-BR');
+  });
+  sel.innerHTML = lista.map(function(x){
+    return '<option value="'+x.id+'">'+x.nome+' ('+x.segmento+')</option>';
+  }).join('');
+  campRenderPreview();
+}
+function campRenderPreview() {
+  var c = campAtual(), m = campMsgAtual();
+  var box = document.getElementById('camp-preview');
+  if (!c || !m) { box.innerHTML = ''; return; }
+  var id = document.getElementById('camp-prev-sel').value;
+  var ct = (c.contatos||[]).find(function(x){ return x.id === id; });
+  if (!ct) { box.innerHTML = '<p style="font-size:12px;color:var(--muted2)">Importe o público para ver a prévia com dados reais.</p>'; return; }
+  box.innerHTML = (m.blocos||[]).map(function(b) {
+    if (b.tipo === 'imagem') {
+      return '<div class="camp-prev" style="color:var(--muted)">🖼️ ' + (b.arquivo || '(sem arquivo)')
+        + (b.legenda ? '\n' + campResolver(b.legenda, ct) : '') + '</div>';
+    }
+    return '<div class="camp-prev">' + campResolver(b.conteudo, ct).replace(/</g,'&lt;') + '</div>';
+  }).join('<div style="text-align:center;font-size:11px;color:var(--muted2);padding:6px 0">↓ delay entre blocos ↓</div>');
+}
+
+// ── Contatos ─────────────────────────────────────────────────────────────────
+function campRenderContatos() {
+  var c = campAtual();
+  var tb = document.getElementById('camp-contatos');
+  if (!c) { tb.innerHTML = ''; return; }
+  var filtro = document.getElementById('camp-filtro').value;
+  var lista = (c.contatos||[]).filter(function(x){ return !filtro || x.status === filtro; });
+  tb.innerHTML = lista.map(function(x) {
+    return '<tr>'
+      + '<td>' + (x.nome||'') + '</td>'
+      + '<td style="font-family:monospace;font-size:11px">' + (x.telefone||'') + '</td>'
+      + '<td>' + (x.segmento||'') + '</td>'
+      + '<td style="color:var(--muted)">' + (x.mensagemId||'') + '</td>'
+      + '<td><span class="camp-st st-' + (x.status||'fila') + '">' + (x.status||'fila') + '</span></td>'
+      + '<td style="color:var(--muted2);font-size:11px">' + (x.enviadoEm ? String(x.enviadoEm).slice(0,16).replace('T',' ') : '—') + '</td>'
+      + '</tr>';
+  }).join('') || '<tr><td colspan="6" style="color:var(--muted2);text-align:center;padding:16px">Nenhum contato.</td></tr>';
+  campRenderContadores();
+}
+
+function campToggleImport() {
+  var el = document.getElementById('camp-import');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+function campSplitLinha(l) {
+  if (l.indexOf('\t') >= 0) return l.split('\t');
+  if (l.indexOf(';') >= 0)  return l.split(';');
+  return l.split(',');
+}
+function campAnalisarImport() {
+  var txt = (document.getElementById('camp-import-txt').value || '').trim();
+  if (!txt) return alert('Cole os dados primeiro.');
+  var linhas = txt.split(/\r?\n/).filter(function(l){ return l.trim(); });
+  if (linhas.length < 2) return alert('Precisa de cabeçalho + ao menos uma linha.');
+  var cab = campSplitLinha(linhas[0]).map(function(x){ return x.trim(); });
+  CAMP_IMPORT = { cab: cab, linhas: linhas.slice(1).map(campSplitLinha) };
+  // Palpite de mapeamento pelo nome da coluna — o operador confere e corrige
+  var palpite = function(h) {
+    h = h.toLowerCase();
+    if (/nome|cliente/.test(h))        return 'nome';
+    if (/tel|fone|whats|celular/.test(h)) return 'telefone';
+    if (/mail/.test(h))                return 'email';
+    if (/produto|plano/.test(h))       return 'produto';
+    if (/valor|preco|preço/.test(h))   return 'valor';
+    if (/data|venc|falha/.test(h))     return 'dataFalha';
+    if (/segmento|motivo/.test(h))     return 'segmento';
+    return '';
+  };
+  document.getElementById('camp-map').style.display = 'block';
+  document.getElementById('camp-map').innerHTML =
+    '<div class="camp-sec" style="margin-top:0">Mapeamento — ' + CAMP_IMPORT.linhas.length + ' linha(s)</div>'
+    + '<div class="camp-grid">' + cab.map(function(h, i) {
+        return '<div class="field"><label>' + (h || 'coluna ' + (i+1)) + '</label><select id="map-' + i + '">'
+          + CAMP_CAMPOS_IMPORT.map(function(cp) {
+              return '<option value="' + cp[0] + '"' + (cp[0] === palpite(h) ? ' selected' : '') + '>' + cp[1] + '</option>';
+            }).join('') + '</select></div>';
+      }).join('') + '</div>'
+    + '<div class="camp-aviso" style="margin-top:14px">Importar <b>substitui</b> a lista de contatos desta campanha. Status já gravados se perdem.</div>'
+    + '<button class="btn btn-blue" onclick="campImportar()">Importar público</button>';
+}
+function campTelefone(t) {
+  var d = String(t || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.length >= 12 && d.slice(0,2) === '55') return d;
+  if (d.length === 10 || d.length === 11) return '55' + d;
+  return d;
+}
+function campImportar() {
+  var c = campAtual(); if (!c || !CAMP_IMPORT) return;
+  var mapa = CAMP_IMPORT.cab.map(function(_, i){ return document.getElementById('map-' + i).value; });
+  if (mapa.indexOf('telefone') < 0) return alert('Mapeie a coluna de telefone.');
+  var idsMsg = (c.mensagens||[]).map(function(m){ return m.id; });
+  var novos = [], vistos = {};
+  CAMP_IMPORT.linhas.forEach(function(cols, n) {
+    var o = {};
+    mapa.forEach(function(campo, i) { if (campo) o[campo] = (cols[i] || '').trim(); });
+    var tel = campTelefone(o.telefone);
+    if (!tel || vistos[tel]) return;   // sem telefone ou duplicado: fora
+    vistos[tel] = 1;
+    var seg = o.segmento || '*';
+    // Casa com a mensagem do mesmo segmento; se não houver, cai na primeira '*'
+    var msg = idsMsg.indexOf(seg) >= 0 ? seg
+            : ((c.mensagens.find(function(m){ return m.segmento === seg; }) || {}).id
+               || (c.mensagens.find(function(m){ return m.segmento === '*'; }) || c.mensagens[0] || {}).id || '');
+    novos.push({
+      id: 'ct-' + String(n + 1).padStart(3, '0'),
+      nome: o.nome || '',
+      primeiroNome: (o.nome || '').trim().split(/\s+/)[0] || '',
+      telefone: tel,
+      jid: tel + '@s.whatsapp.net',
+      email: o.email || '',
+      produto: o.produto || '',
+      valor: Number(String(o.valor || '').replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0,
+      dataFalha: o.dataFalha || '',
+      segmento: seg,
+      obs: o.obs || '',
+      status: 'fila',
+      enviadoEm: null, respondidoEm: null, followupEm: null, erro: null,
+      mensagemId: msg, tentativasEnvio: 0
+    });
+  });
+  if (!novos.length) return alert('Nenhuma linha válida.');
+  if (!confirm('Importar ' + novos.length + ' contato(s)? A lista atual (' + (c.contatos||[]).length + ') será substituída.')) return;
+  c.contatos = novos;
+  document.getElementById('camp-import').style.display = 'none';
+  document.getElementById('camp-import-txt').value = '';
+  document.getElementById('camp-map').style.display = 'none';
+  CAMP_IMPORT = null;
+  campRenderContatos();
+  campRenderPrevSel();
+  campFb('camp-salvar-fb', novos.length + ' contato(s) importado(s) — clique em Salvar campanha.', true);
+}
+
 // ══ INIT ══
 window.addEventListener('DOMContentLoaded', function() {
   carregarHistoricoTransferencias();
@@ -2767,6 +3429,7 @@ window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('tab-milhas').addEventListener('click', function(){ switchMain('milhas'); });
   document.getElementById('tab-alertas').addEventListener('click', function(){ switchMain('alertas'); });
   document.getElementById('tab-ofertas').addEventListener('click', function(){ switchMain('ofertas'); });
+  document.getElementById('tab-campanha').addEventListener('click', function(){ switchMain('campanha'); });
   document.getElementById('mt-link').addEventListener('click',   function(){ setMode('link'); });
   document.getElementById('mt-texto').addEventListener('click',  function(){ setMode('texto'); });
   document.getElementById('mt-imagem').addEventListener('click', function(){ setMode('imagem'); });
