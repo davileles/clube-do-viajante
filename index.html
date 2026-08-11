@@ -480,6 +480,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(.5
         <div class="field"><label>Segmento <span class="tag">* = todos</span></label><input type="text" id="camp-msg-seg" oninput="campMsgMeta()"/></div>
       </div>
 
+      <div id="camp-vars" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:14px"></div>
       <div id="camp-blocos"></div>
       <div style="display:flex;gap:8px;margin-bottom:18px">
         <button class="camp-mini" onclick="campAddBloco('texto')">+ Bloco de texto</button>
@@ -2940,8 +2941,12 @@ var CAMP_TETO_DIARIO = 25;   // trava dura: num dia de pressa é fácil subir pa
 var CAMP_CAMPOS_IMPORT = [
   ['nome','Nome completo'], ['telefone','Telefone'], ['email','E-mail'],
   ['produto','Produto'], ['valor','Valor'], ['dataFalha','Data da falha'],
-  ['segmento','Segmento'], ['obs','Observação'], ['','— ignorar —']
+  ['segmento','Segmento'], ['obs','Observação'],
+  ['__novo__','+ variável personalizada'], ['','— ignorar —']
 ];
+// Campos que o sistema usa para operar. Qualquer outro vira variável de texto e
+// só isso — nome de campo personalizado não pode colidir com estes.
+var CAMP_RESERVADOS = ['id','jid','status','enviadoEm','respondidoEm','followupEm','erro','mensagemId','tentativasEnvio','primeiroNome'];
 
 function campHead() {
   return { 'Content-Type':'application/json', 'X-CDV-Op': CAMP_KEY };
@@ -3197,9 +3202,37 @@ function campNovaMensagem() {
   campRenderMensagens(c);
 }
 
+// Variáveis = tudo que existe no contato menos os campos de controle.
+function campVariaveis(c) {
+  var chaves = {};
+  (c.contatos || []).slice(0, 20).forEach(function(ct) {
+    Object.keys(ct).forEach(function(k) {
+      if (CAMP_RESERVADOS.indexOf(k) < 0) chaves[k] = 1;
+    });
+  });
+  chaves['primeiroNome'] = 1;   // derivado do nome, sempre disponível
+  return Object.keys(chaves).sort();
+}
+function campRenderVars() {
+  var c = campAtual();
+  var el = document.getElementById('camp-vars');
+  if (!el || !c) return;
+  var vars = campVariaveis(c);
+  el.innerHTML = vars.length
+    ? '<span style="font-size:11px;color:var(--muted2);margin-right:6px">Disponíveis:</span>'
+      + vars.map(function(v) {
+          return '<span class="camp-pill" style="cursor:pointer" onclick="campCopiarVar(\'' + v + '\')">{' + v + '}</span>';
+        }).join(' ')
+    : '<span style="font-size:11px;color:var(--muted2)">Importe o público para gerar as variáveis.</span>';
+}
+function campCopiarVar(v) {
+  navigator.clipboard.writeText('{' + v + '}').catch(function(){});
+}
+
 function campRenderBlocos() {
   var m = campMsgAtual();
   var wrap = document.getElementById('camp-blocos');
+  campRenderVars();
   if (!m) { wrap.innerHTML = ''; return; }
   document.getElementById('camp-msg-nome').value = m.nome || '';
   document.getElementById('camp-msg-seg').value  = m.segmento || '*';
@@ -3361,14 +3394,32 @@ function campAnalisarImport() {
   document.getElementById('camp-map').innerHTML =
     '<div class="camp-sec" style="margin-top:0">Mapeamento — ' + CAMP_IMPORT.linhas.length + ' linha(s)</div>'
     + '<div class="camp-grid">' + cab.map(function(h, i) {
-        return '<div class="field"><label>' + (h || 'coluna ' + (i+1)) + '</label><select id="map-' + i + '">'
+        return '<div class="field"><label>' + (h || 'coluna ' + (i+1)) + '</label>'
+          + '<select id="map-' + i + '" data-i="' + i + '" onchange="campMapMudou(this.dataset.i)">'
           + CAMP_CAMPOS_IMPORT.map(function(cp) {
               return '<option value="' + cp[0] + '"' + (cp[0] === palpite(h) ? ' selected' : '') + '>' + cp[1] + '</option>';
-            }).join('') + '</select></div>';
+            }).join('') + '</select>'
+          + '<input type="text" id="mapn-' + i + '" style="display:none;margin-top:6px" placeholder="nome da variável (ex: cidade)" value="' + campNomeVar(h) + '"/>'
+          + '</div>';
       }).join('') + '</div>'
     + '<div class="camp-aviso" style="margin-top:14px">Importar <b>substitui</b> a lista de contatos desta campanha. Status já gravados se perdem.</div>'
     + '<button class="btn btn-blue" onclick="campImportar()">Importar público</button>';
 }
+// Cabeçalho da planilha vira nome de variável: sem acento, sem espaço, camelCase.
+function campNomeVar(h) {
+  var limpo = String(h || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9 ]/g, ' ').trim().split(/\s+/);
+  if (!limpo[0]) return '';
+  return limpo[0].toLowerCase() + limpo.slice(1).map(function(x) {
+    return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase();
+  }).join('');
+}
+function campMapMudou(i) {
+  var sel = document.getElementById('map-' + i);
+  var inp = document.getElementById('mapn-' + i);
+  inp.style.display = sel.value === '__novo__' ? 'block' : 'none';
+}
+
 function campTelefone(t) {
   var d = String(t || '').replace(/\D/g, '');
   if (!d) return '';
@@ -3378,13 +3429,29 @@ function campTelefone(t) {
 }
 function campImportar() {
   var c = campAtual(); if (!c || !CAMP_IMPORT) return;
-  var mapa = CAMP_IMPORT.cab.map(function(_, i){ return document.getElementById('map-' + i).value; });
+  var erroMapa = null;
+  var mapa = CAMP_IMPORT.cab.map(function(_, i) {
+    var v = document.getElementById('map-' + i).value;
+    if (v !== '__novo__') return v;
+    var nome = campNomeVar(document.getElementById('mapn-' + i).value);
+    if (!nome) erroMapa = 'Dê um nome à variável da coluna "' + (CAMP_IMPORT.cab[i] || (i+1)) + '".';
+    else if (CAMP_RESERVADOS.indexOf(nome) >= 0) erroMapa = '"' + nome + '" é um campo interno do sistema. Escolha outro nome.';
+    return nome;
+  });
+  if (erroMapa) return alert(erroMapa);
   if (mapa.indexOf('telefone') < 0) return alert('Mapeie a coluna de telefone.');
+  var dups = mapa.filter(Boolean).filter(function(v, i, a){ return a.indexOf(v) !== i; });
+  if (dups.length) return alert('Duas colunas mapeadas para "' + dups[0] + '".');
   var idsMsg = (c.mensagens||[]).map(function(m){ return m.id; });
   var novos = [], vistos = {};
   CAMP_IMPORT.linhas.forEach(function(cols, n) {
-    var o = {};
-    mapa.forEach(function(campo, i) { if (campo) o[campo] = (cols[i] || '').trim(); });
+    var o = {}, extras = {};
+    mapa.forEach(function(campo, i) {
+      if (!campo) return;
+      var val = (cols[i] || '').trim();
+      o[campo] = val;
+      if (CAMP_CAMPOS_IMPORT.every(function(cp){ return cp[0] !== campo; })) extras[campo] = val;
+    });
     var tel = campTelefone(o.telefone);
     if (!tel || vistos[tel]) return;   // sem telefone ou duplicado: fora
     vistos[tel] = 1;
@@ -3409,10 +3476,14 @@ function campImportar() {
       enviadoEm: null, respondidoEm: null, followupEm: null, erro: null,
       mensagemId: msg, tentativasEnvio: 0
     });
+    // Colunas personalizadas entram no contato como estão — o resolvedor de
+    // variáveis lê qualquer campo, então {cidade} passa a funcionar no texto.
+    Object.keys(extras).forEach(function(k){ novos[novos.length - 1][k] = extras[k]; });
   });
   if (!novos.length) return alert('Nenhuma linha válida.');
   if (!confirm('Importar ' + novos.length + ' contato(s)? A lista atual (' + (c.contatos||[]).length + ') será substituída.')) return;
   c.contatos = novos;
+  c.variaveis = campVariaveis(c);
   document.getElementById('camp-import').style.display = 'none';
   document.getElementById('camp-import-txt').value = '';
   document.getElementById('camp-map').style.display = 'none';
