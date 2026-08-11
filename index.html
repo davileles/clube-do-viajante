@@ -461,6 +461,7 @@ body[data-tema="light"] textarea.out{color:var(--text)}
         </div>
         <button class="camp-mini" style="padding:10px 14px" onclick="campRecarregar()" title="Recarregar do servidor">↻</button>
         <button class="camp-mini" style="padding:10px 14px" onclick="campNova()">+ Nova</button>
+        <button class="camp-mini" style="padding:10px 14px;color:#ff9a9d" onclick="campExcluir()" title="Excluir campanha">🗑️</button>
       </div>
     </div>
 
@@ -3119,7 +3120,7 @@ async function campCarregar() {
 // Recarrega do servidor. Durante uma campanha rodando, o painel na tela e uma
 // foto do momento em que abriu: quem manda no status e o worker.
 async function campRecarregar() {
-  var manter = CAMP_ID;
+  var manter = CAMP_ID;   // null apos exclusao: o seletor cai na primeira campanha
   try {
     var d = await campApi('/campanhas');
     CAMP_DB = d.data;
@@ -3394,6 +3395,34 @@ async function campStatus(novo) {
     c.status = d.status;
     campFb('camp-status-fb', '✓ Campanha ' + d.status + '.', true);
     campRenderSeletor();
+  } catch(e) {
+    campFb('camp-status-fb', 'Erro: ' + e.message);
+  }
+}
+
+// Excluir e definitivo: leva junto o historico de envio da campanha. Por isso
+// pede o nome digitado, avisa quantos contatos ja receberam, e o servidor
+// recusa campanha ativa mesmo que a interface deixe passar.
+async function campExcluir() {
+  var c = campAtual(); if (!c) return;
+  if (c.status === 'ativa') return campFb('camp-status-fb', 'Pause a campanha antes de excluir.');
+
+  var ct = c.contatos || [];
+  var jaEnviados = ct.filter(function(x){ return x.status !== 'fila'; }).length;
+  var aviso = 'Excluir a campanha "' + c.nome + '"?\n\n'
+    + ct.length + ' contato(s) na lista'
+    + (jaEnviados ? ', ' + jaEnviados + ' com histórico de envio que será perdido' : '')
+    + '.\n\nIsto não tem volta. Digite o nome da campanha para confirmar:';
+  var resp = prompt(aviso, '');
+  if (resp === null) return;
+  if (String(resp).trim() !== String(c.nome).trim()) {
+    return campFb('camp-status-fb', 'Nome não confere — nada foi excluído.');
+  }
+  try {
+    await campApi('/campanhas/excluir', { method:'POST', body:{ campanhaId: c.id, confirmacao: resp } });
+    CAMP_ID = null;
+    await campRecarregar();
+    campFb('camp-status-fb', '✓ Campanha excluída.', true);
   } catch(e) {
     campFb('camp-status-fb', 'Erro: ' + e.message);
   }
