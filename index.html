@@ -2817,7 +2817,9 @@ function abrirMesclar(id) {
   var modal = document.getElementById('modal-mesclar');
   var lista  = document.getElementById('mesclar-lista');
   var ofertas = window._alertasCache || [];
-  var outras = ofertas.filter(function(o){ return o.id !== id && o.status === 'pendente'; });
+  // Apenas alertas de passagem do monitoramento — itens TSP (cupons e
+  // ofertas de marketplace) usam o mesmo cache mas nao pertencem a esta aba.
+  var outras = ofertas.filter(function(o){ return o.id !== id && o.status === 'pendente' && ehAlertaGerador(o); });
   if (outras.length === 0) {
     alert('Nenhuma outra oferta pendente para mesclar.');
     return;
