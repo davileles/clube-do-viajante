@@ -461,6 +461,7 @@ body[data-tema="light"] textarea.out{color:var(--text)}
         </div>
         <button class="camp-mini" style="padding:10px 14px" onclick="campRecarregar()" title="Recarregar do servidor">↻</button>
         <button class="camp-mini" style="padding:10px 14px" onclick="campNova()">+ Nova</button>
+        <button class="camp-mini" style="padding:10px 14px" onclick="campDuplicar()" title="Duplicar campanha">⧉</button>
         <button class="camp-mini" style="padding:10px 14px;color:#ff9a9d" onclick="campExcluir()" title="Excluir campanha">🗑️</button>
       </div>
     </div>
@@ -3400,26 +3401,14 @@ async function campStatus(novo) {
   }
 }
 
-// Excluir e definitivo: leva junto o historico de envio da campanha. Por isso
-// pede o nome digitado, avisa quantos contatos ja receberam, e o servidor
-// recusa campanha ativa mesmo que a interface deixe passar.
+// Excluir e definitivo: leva junto o historico de envio da campanha. A exclusao
+// e imediata (sem confirmacao na interface); o servidor ainda exige o nome como
+// confirmacao, entao enviamos c.nome direto, e recusa campanha ativa.
 async function campExcluir() {
   var c = campAtual(); if (!c) return;
   if (c.status === 'ativa') return campFb('camp-status-fb', 'Pause a campanha antes de excluir.');
-
-  var ct = c.contatos || [];
-  var jaEnviados = ct.filter(function(x){ return x.status !== 'fila'; }).length;
-  var aviso = 'Excluir a campanha "' + c.nome + '"?\n\n'
-    + ct.length + ' contato(s) na lista'
-    + (jaEnviados ? ', ' + jaEnviados + ' com histórico de envio que será perdido' : '')
-    + '.\n\nIsto não tem volta. Digite o nome da campanha para confirmar:';
-  var resp = prompt(aviso, '');
-  if (resp === null) return;
-  if (String(resp).trim() !== String(c.nome).trim()) {
-    return campFb('camp-status-fb', 'Nome não confere — nada foi excluído.');
-  }
   try {
-    await campApi('/campanhas/excluir', { method:'POST', body:{ campanhaId: c.id, confirmacao: resp } });
+    await campApi('/campanhas/excluir', { method:'POST', body:{ campanhaId: c.id, confirmacao: c.nome } });
     CAMP_ID = null;
     await campRecarregar();
     campFb('camp-status-fb', '✓ Campanha excluída.', true);
@@ -3451,6 +3440,33 @@ function campNova() {
   });
   CAMP_ID = id;
   campRenderSeletor();
+}
+
+// Duplicar: copia mensagens, config, variaveis e contatos da campanha atual.
+// Contatos voltam para a fila (historico de envio nao acompanha a copia).
+function campDuplicar() {
+  var base = campAtual(); if (!base) return;
+  var nome = base.nome + ' (cópia)';
+  var raiz = (base.id + '-copia').slice(0,36);
+  var id = raiz, n = 2;
+  while (CAMP_DB.campanhas.some(function(c){ return c.id === id; })) { id = raiz + '-' + (n++); }
+  var nova = JSON.parse(JSON.stringify(base));
+  nova.id = id;
+  nova.nome = nome;
+  nova.status = 'rascunho';
+  nova.criadoEm = new Date().toISOString().slice(0,10);
+  (nova.contatos || []).forEach(function(ct){
+    ct.status = 'fila';
+    ct.enviadoEm = null;
+    ct.respondidoEm = null;
+    ct.followupEm = null;
+    if ('erro' in ct) ct.erro = null;
+  });
+  CAMP_DB.campanhas.push(nova);
+  CAMP_ID = id;
+  campRenderSeletor();
+  campSujo();
+  campFb('camp-status-fb', '✓ Campanha duplicada — salve para persistir.', true);
 }
 
 // ── Mensagens e blocos ───────────────────────────────────────────────────────
