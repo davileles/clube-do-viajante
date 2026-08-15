@@ -2047,12 +2047,16 @@ function renderAlertaCard(o) {
   }
   var textoHtml = o.conteudoOriginal ? '<div class="alerta-texto">'+escapeHtml(o.conteudoOriginal)+'</div>' : '';
   var origemCol = imgsHtml || textoHtml ? (imgsHtml + textoHtml) : '<div style="color:var(--muted2);font-size:12px">Sem conteúdo original</div>';
+  var motivoHtml = o.motivoFila
+    ? '<div style="margin:10px 14px 0;padding:8px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.35);border-radius:8px;font-size:12px;color:#f59e0b;line-height:1.5">🛈 <strong>Por que está aqui:</strong> '+escapeHtml(o.motivoFila)+'</div>'
+    : '';
 
   return '<div class="alerta-card" id="alerta-card-'+o.id+'">'
     +'<div class="alerta-header">'
     +'<span class="alerta-id">#'+o.id+'</span>'+rota+tipoTag+cabineTag+progTag+sanidadeTag
     +'<span class="alerta-time">'+data+'</span>'
     +'</div>'
+    + motivoHtml
     +'<div class="alerta-body">'
     +'<div class="alerta-col"><div class="alerta-col-title">Original ('+o.tipoConteudo+')</div>'+origemCol+'</div>'
     +'<div class="alerta-col"><div class="alerta-col-title">Mensagem formatada</div>'
