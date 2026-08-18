@@ -2169,9 +2169,14 @@ async function carregarEnviadasHoje() {
                         {cache:'no-cache', signal:AbortSignal.timeout(15000)});
     var d = await r.json();
     var items = Array.isArray(d.items) ? d.items : [];
-    // 'coleta' é varredura de disponibilidade, não saiu no grupo — fica de fora.
+    // Whitelist, não blacklist: 'coleta' (varredura seats.aero via Cowork) e
+    // 'alerta_rejeitado' ("Rejeitar e Salvar") entram em passagens.json para
+    // alimentar o hist180, mas NUNCA saíram no grupo. Só 'alerta' e 'emissao'
+    // representam mensagem publicada. Registro sem fonte é lote antigo
+    // importado — o proxy assume 'emissao', então segue o mesmo tratamento.
+    var FONTES_PUBLICADAS = ['alerta', 'emissao'];
     var doDia = items.filter(function(p) {
-      if (p.fonte === 'coleta') return false;
+      if (p.fonte && FONTES_PUBLICADAS.indexOf(p.fonte) < 0) return false;
       var t = Date.parse(p.enviadoEm);
       return isFinite(t) && _diaSP(new Date(t)) === hoje;
     });
