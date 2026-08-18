@@ -30,6 +30,13 @@ label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.4px;text
 .tag{font-size:10px;font-weight:500;color:var(--muted2);text-transform:none;letter-spacing:0}
 input,select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font);font-size:14px;font-weight:500;padding:10px 12px;width:100%;outline:none;transition:border-color .15s;appearance:none;-webkit-appearance:none}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+input[type="checkbox"]{appearance:auto!important;-webkit-appearance:auto!important;accent-color:var(--accent);width:17px!important;height:17px;min-width:17px;flex:0 0 auto;padding:0!important;margin:0;cursor:pointer;background:none;border:none;border-radius:0}
+.chk-box{display:flex;align-items:center;gap:10px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;color:var(--text);background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;transition:border-color .15s,background .15s}
+.chk-box:hover{border-color:var(--accent)}
+.chk-box.on{border-color:#f59e0b;background:rgba(245,158,11,.10)}
+.chk-status{margin-left:auto;font-size:10px;font-weight:800;letter-spacing:.5px;padding:3px 9px;border-radius:20px;white-space:nowrap;text-transform:uppercase}
+.chk-status.on{background:#f59e0b;color:#1a1200}
+.chk-status.off{background:var(--surface);color:var(--muted2);border:1px solid var(--border2)}
 input::placeholder,textarea::placeholder{color:var(--muted2)}
 textarea{resize:vertical;min-height:90px;line-height:1.6}
 input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.5);cursor:pointer}
@@ -2319,6 +2326,16 @@ function destinoOptionsHtml(sel) {
   }).join('');
 }
 
+function atualizarSemHist(id) {
+  var el = document.getElementById('of-semhist-'+id);
+  var lab = document.getElementById('of-semhist-label-'+id);
+  var st = document.getElementById('of-semhist-status-'+id);
+  if (!el) return;
+  var on = el.checked;
+  if (lab) lab.className = 'chk-box' + (on ? ' on' : '');
+  if (st) { st.className = 'chk-status ' + (on ? 'on' : 'off'); st.textContent = on ? 'Não será registrado' : 'Será registrado'; }
+}
+
 function toggleCamposHistorico(id) {
   var catEl = document.getElementById('of-categoria-'+id);
   var cat = catEl ? catEl.value : '';
@@ -2460,6 +2477,7 @@ function renderOfertasPendentes() {
     return;
   }
   lista.innerHTML = ofertasPendentesData.map(renderOfertaPendenteCard).join('');
+  ofertasPendentesData.forEach(function(o){ atualizarSemHist(o.id); });
 }
 
 function ofCatOptions(sel) {
@@ -2507,7 +2525,11 @@ function renderOfertaPendenteCard(o) {
       +'</div>'
       +'<div class="field" id="of-bonusmaxrow-'+o.id+'" style="'+mostrarHist+'"><label>Bônus máximo % (histórico)</label><input type="number" min="0" max="500" id="of-bonusmax-'+o.id+'" value="'+(guess.bonusMax!=null?guess.bonusMax:'')+'" oninput="atualizarPrevia(\''+o.id+'\')"/></div>'
       +'<div class="field" id="of-semhistrow-'+o.id+'" style="'+mostrarHist+'">'
-        +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" id="of-semhist-'+o.id+'"'+(guess.combo?' checked':'')+' style="width:auto;margin:0"/> Não registrar no histórico de transferências (oferta combo ou derivada de campanhas já registradas)</label>'
+        +'<label class="chk-box'+(guess.combo?' on':'')+'" id="of-semhist-label-'+o.id+'">'
+          +'<input type="checkbox" id="of-semhist-'+o.id+'"'+(guess.combo?' checked':'')+' onchange="atualizarSemHist(\''+o.id+'\')"/>'
+          +'<span>Não registrar no histórico de transferências<br><span style="font-size:11px;color:var(--muted2)">(oferta combo ou derivada de campanhas já registradas)</span></span>'
+          +'<span class="chk-status '+(guess.combo?'on':'off')+'" id="of-semhist-status-'+o.id+'">'+(guess.combo?'Não será registrado':'Será registrado')+'</span>'
+        +'</label>'
         +(guess.combo?'<div style="font-size:11px;color:#f59e0b;margin-top:6px;line-height:1.5">⚠️ Combo detectado: os percentuais do título pertencem a pernas diferentes. O bônus máximo não foi deduzido — preencha manualmente só se for registrar.</div>':'')
       +'</div>'
       +'<div class="field" id="of-progcomprarow-'+o.id+'" style="'+mostrarCompra+'"><label>Programa (histórico)</label><select id="of-programacompra-'+o.id+'" onchange="atualizarPrevia(\''+o.id+'\')">'+programaCompraOptionsHtml(programaCompraGuess)+'</select></div>'
