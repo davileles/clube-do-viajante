@@ -163,6 +163,20 @@ body[data-tema="light"] .camp-passo.ok .camp-num{background:#16a34a;border-color
 .alerta-fb{font-size:12px;font-weight:700;margin-left:auto}
 .alerta-sep{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 .alerta-empty{text-align:center;color:var(--muted2);padding:48px 0;font-size:14px}
+.env-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.env-tab{width:100%;border-collapse:collapse;font-size:13px}
+.env-tab th{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:800;text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface2)}
+.env-tab td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap;vertical-align:middle}
+.env-tab tr:last-child td{border-bottom:none}
+.env-tab tr:hover td{background:var(--surface2)}
+.env-rota{font-weight:700}
+.env-pts{font-variant-numeric:tabular-nums;font-weight:700}
+.env-badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.env-auto{background:rgba(34,197,94,.14);color:#22c55e}
+.env-aprov{background:rgba(245,158,11,.14);color:#f59e0b}
+.env-manual{background:rgba(96,165,250,.14);color:#60a5fa}
+.env-resumo{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted);margin-bottom:12px}
+.env-resumo strong{color:var(--text);font-size:15px}
 .alerta-buffer{background:rgba(255,88,94,.08);border:1px solid rgba(255,88,94,.25);border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .spin{display:inline-block;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -242,6 +256,7 @@ body[data-tema="light"] textarea.out{color:var(--text)}
   <button class="main-tab active" id="tab-oferta">✈️ Oferta</button>
   <button class="main-tab" id="tab-milhas">🎟️ Emissão</button>
   <button class="main-tab" id="tab-alertas">🔔 Alertas<span class="alerta-badge" id="alertas-badge" style="display:none">0</span></button>
+  <button class="main-tab" id="tab-enviadas">✅ Enviadas hoje</button>
   <button class="main-tab" id="tab-ofertas">📡 Aprovar Ofertas<span class="alerta-badge" id="ofertas-badge" style="display:none">0</span></button>
   <button class="main-tab" id="tab-campanha">📣 Campanha</button>
 </div>
@@ -432,6 +447,16 @@ body[data-tema="light"] textarea.out{color:var(--text)}
     <div class="alerta-sep">Processados recentemente</div>
     <div id="alertas-processados"></div>
   </div>
+</div>
+
+<!-- ══ PAINEL ENVIADAS HOJE ══ -->
+<div class="main-panel" id="panel-enviadas">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+    <div style="font-size:12px;color:var(--muted2)">Emissões que saíram no grupo <strong style="color:var(--muted)">hoje</strong> (<span id="env-data">—</span>). A lista zera à meia-noite.</div>
+    <button class="btn" style="background:#3f3f3f;color:#aaa;font-size:12px;padding:7px 14px;width:auto;margin:0" onclick="carregarEnviadasHoje()">↻ Atualizar</button>
+  </div>
+  <div class="env-resumo" id="env-resumo"></div>
+  <div id="env-lista"></div>
 </div>
 
 <!-- ══ PAINEL APROVAR OFERTAS ══ -->
@@ -783,11 +808,12 @@ document.getElementById('logo-img').src = "data:image/png;base64,/9j/4AAQSkZJRgA
 
 // ══ TABS ══
 function switchMain(name) {
-  ['oferta','milhas','alertas','ofertas','campanha'].forEach(function(id) {
+  ['oferta','milhas','alertas','enviadas','ofertas','campanha'].forEach(function(id) {
     document.getElementById('tab-'+id).classList.toggle('active', id===name);
     document.getElementById('panel-'+id).classList.toggle('active', id===name);
   });
   if (name === 'alertas') carregarAlertas();
+  if (name === 'enviadas') carregarEnviadasHoje();
   if (name === 'ofertas') carregarOfertasPendentes();
   if (name === 'campanha') campAoAbrir();
 }
@@ -2086,6 +2112,109 @@ function renderAlertaCard(o) {
     +'</div>'
     +'</div>'
     +'</div>';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENVIADAS HOJE — emissões que saíram no grupo no dia vigente (America/Sao_Paulo)
+// Fonte: passagens.json via /passagens/listar. O baileys-server grava lá no
+// worker de envio (único ponto de gravação definitiva), então o que aparece
+// aqui é exatamente o que foi ao ar. Vira o dia → a lista reinicia sozinha.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Retorna 'YYYY-MM-DD' no fuso de São Paulo (o navegador pode estar em outro TZ).
+function _diaSP(d) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit'
+    }).format(d);
+  } catch(e) {
+    return new Date(d.getTime() - 3*3600000).toISOString().slice(0,10);
+  }
+}
+
+function _horaSP(iso) {
+  var t = Date.parse(iso);
+  if (!isFinite(t)) return '—';
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone:'America/Sao_Paulo', hour:'2-digit', minute:'2-digit'
+    }).format(new Date(t));
+  } catch(e) { return new Date(t).toLocaleTimeString('pt-BR').slice(0,5); }
+}
+
+// Ida x ida e volta: passagens.json não guarda o campo 'tipo' do alerta, mas
+// datas_volta preenchida é o mesmo critério usado na formatação da mensagem.
+function _tipoPassagem(p) {
+  var dv = String(p.datas_volta || '').replace(/[-\s]/g, '');
+  return dv ? 'Ida e volta' : 'Somente ida';
+}
+
+function _origemEnvio(p) {
+  if (p.auto === true) return {cls:'env-auto',  txt:'Automático'};
+  if (p.fonte === 'emissao') return {cls:'env-manual', txt:'Emissão manual'};
+  return {cls:'env-aprov', txt:'Aprovação'};
+}
+
+async function carregarEnviadasHoje() {
+  var lista   = document.getElementById('env-lista');
+  var resumo  = document.getElementById('env-resumo');
+  var dataEl  = document.getElementById('env-data');
+  if (!lista) return;
+  var hoje = _diaSP(new Date());
+  if (dataEl) dataEl.textContent = hoje.split('-').reverse().join('/');
+  lista.innerHTML = '<div class="alerta-empty">Carregando...</div>';
+  resumo.innerHTML = '';
+  try {
+    var r = await fetch(CDV_PROXY + '/passagens/listar?t=' + Date.now(),
+                        {cache:'no-cache', signal:AbortSignal.timeout(15000)});
+    var d = await r.json();
+    var items = Array.isArray(d.items) ? d.items : [];
+    // 'coleta' é varredura de disponibilidade, não saiu no grupo — fica de fora.
+    var doDia = items.filter(function(p) {
+      if (p.fonte === 'coleta') return false;
+      var t = Date.parse(p.enviadoEm);
+      return isFinite(t) && _diaSP(new Date(t)) === hoje;
+    });
+    doDia.sort(function(a,b){ return Date.parse(b.enviadoEm) - Date.parse(a.enviadoEm); });
+
+    if (doDia.length === 0) {
+      resumo.innerHTML = '';
+      lista.innerHTML = '<div class="alerta-empty">📭 Nenhuma emissão enviada hoje ainda.<br><span style="font-size:12px;color:var(--muted2)">Assim que uma emissão sair no grupo ela aparece aqui.</span></div>';
+      return;
+    }
+
+    var nAuto  = doDia.filter(function(p){ return p.auto === true; }).length;
+    var nMan   = doDia.filter(function(p){ return p.fonte === 'emissao'; }).length;
+    var nAprov = doDia.length - nAuto - nMan;
+    resumo.innerHTML =
+        '<span><strong>' + doDia.length + '</strong> emissão(ões) hoje</span>'
+      + '<span class="env-badge env-auto">' + nAuto + ' automático</span>'
+      + '<span class="env-badge env-aprov">' + nAprov + ' por aprovação</span>'
+      + (nMan ? '<span class="env-badge env-manual">' + nMan + ' emissão manual</span>' : '');
+
+    lista.innerHTML = '<div class="env-wrap"><table class="env-tab">'
+      + '<thead><tr>'
+      + '<th>Hora</th><th>Rota</th><th>Tipo</th><th>Cabine</th>'
+      + '<th>Programa</th><th>Cia</th><th style="text-align:right">Pontos</th><th>Envio</th>'
+      + '</tr></thead><tbody>'
+      + doDia.map(function(p) {
+          var oe = _origemEnvio(p);
+          var pts = Number(p.pontos) || 0;
+          return '<tr>'
+            + '<td style="color:var(--muted)">' + _horaSP(p.enviadoEm) + '</td>'
+            + '<td class="env-rota">' + escapeHtml(p.origem||'?') + ' → ' + escapeHtml(p.destino||'?') + '</td>'
+            + '<td style="color:var(--muted)">' + _tipoPassagem(p) + '</td>'
+            + '<td>' + escapeHtml(p.cabine || 'Economica') + '</td>'
+            + '<td>' + escapeHtml(p.programa || '—') + '</td>'
+            + '<td style="color:var(--muted)">' + escapeHtml(p.cia || '—') + '</td>'
+            + '<td class="env-pts" style="text-align:right">' + pts.toLocaleString('pt-BR') + '</td>'
+            + '<td><span class="env-badge ' + oe.cls + '">' + oe.txt + '</span></td>'
+            + '</tr>';
+        }).join('')
+      + '</tbody></table></div>';
+  } catch(e) {
+    lista.innerHTML = '<div class="alerta-empty">⚠️ Falha ao carregar: ' + escapeHtml(e.message) + '</div>';
+  }
 }
 
 function renderAlertaCardProcessado(o) {
@@ -3900,6 +4029,7 @@ window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('tab-oferta').addEventListener('click', function(){ switchMain('oferta'); });
   document.getElementById('tab-milhas').addEventListener('click', function(){ switchMain('milhas'); });
   document.getElementById('tab-alertas').addEventListener('click', function(){ switchMain('alertas'); });
+  document.getElementById('tab-enviadas').addEventListener('click', function(){ switchMain('enviadas'); });
   document.getElementById('tab-ofertas').addEventListener('click', function(){ switchMain('ofertas'); });
   document.getElementById('tab-campanha').addEventListener('click', function(){ switchMain('campanha'); });
   var cfgCorpo = document.getElementById('camp-cfg-corpo');
