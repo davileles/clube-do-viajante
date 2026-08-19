@@ -175,6 +175,15 @@ body[data-tema="light"] .camp-passo.ok .camp-num{background:#16a34a;border-color
 .env-auto{background:rgba(34,197,94,.14);color:#22c55e}
 .env-aprov{background:rgba(245,158,11,.14);color:#f59e0b}
 .env-manual{background:rgba(96,165,250,.14);color:#60a5fa}
+.env-prog{background:rgba(167,139,250,.14);color:#a78bfa}
+.env-sub{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted2);font-weight:800;margin:22px 0 10px;display:flex;align-items:center;gap:10px}
+.env-sub::after{content:'';flex:1;height:1px;background:var(--border)}
+.env-tab tr.env-prog-row td{background:rgba(167,139,250,.04)}
+.env-tab tr.env-prog-row:hover td{background:rgba(167,139,250,.09)}
+.env-prev{font-variant-numeric:tabular-nums;font-weight:700;color:#a78bfa}
+.env-x{background:none;border:1px solid var(--border);color:var(--muted2);border-radius:6px;font-size:11px;font-weight:800;padding:3px 8px;cursor:pointer;line-height:1}
+.env-x:hover{border-color:#ff585e;color:#ff585e}
+.env-msg{color:var(--muted2);font-style:italic;white-space:normal;max-width:520px}
 .env-resumo{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted);margin-bottom:12px}
 .env-resumo strong{color:var(--text);font-size:15px}
 .alerta-buffer{background:rgba(255,88,94,.08);border:1px solid rgba(255,88,94,.25);border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px}
@@ -452,10 +461,13 @@ body[data-tema="light"] textarea.out{color:var(--text)}
 <!-- ══ PAINEL ENVIADAS HOJE ══ -->
 <div class="main-panel" id="panel-enviadas">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap">
-    <div style="font-size:12px;color:var(--muted2)">Emissões que saíram no grupo <strong style="color:var(--muted)">hoje</strong> (<span id="env-data">—</span>). A lista zera à meia-noite.</div>
+    <div style="font-size:12px;color:var(--muted2)">Emissões que saíram no grupo <strong style="color:var(--muted)">hoje</strong> (<span id="env-data">—</span>) e o que ainda está <strong style="color:var(--muted)">programado</strong>. A lista de enviadas zera à meia-noite.</div>
     <button class="btn" style="background:#3f3f3f;color:#aaa;font-size:12px;padding:7px 14px;width:auto;margin:0" onclick="carregarEnviadasHoje()">↻ Atualizar</button>
   </div>
   <div class="env-resumo" id="env-resumo"></div>
+  <div class="env-sub">🕐 Programadas — ainda não enviadas</div>
+  <div id="env-programadas"></div>
+  <div class="env-sub">✅ Já enviadas hoje</div>
   <div id="env-lista"></div>
 </div>
 
@@ -1830,15 +1842,25 @@ async function enviarEmissao(idx) {
   var imgVolta=emissoesPendentes[idx]&&emissoesPendentes[idx]['_imgSelecionada_volta'];
   try {
     var r;
+    // Snapshot estruturado da emissao. Vai junto no POST para (a) a aba
+    // "Enviadas hoje" conseguir mostrar a rota na lista de PROGRAMADAS e (b) o
+    // agendamento registrar a passagem no disparo — antes, emissao agendada
+    // nunca chegava em passagens.json porque o fluxo retornava aqui.
+    var _dadosEnvio = {
+      origem: _ed.origem, destino: _ed.destino, cia: _ed.cia || '',
+      programa: _ed.programa || '', pontos: _ed.pontos || 0,
+      cabine: _ed.classe || '', datasIda: _ed.datas_ida || '',
+      datasVolta: _ed.datas_volta || ''
+    };
     if (agendarEm) {
-      r=await fetch(SERVER+'/enviar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensagem:texto,grupo:GRUPO_EMISSAO,agendarEm:agendarEm})});
+      r=await fetch(SERVER+'/enviar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensagem:texto,grupo:GRUPO_EMISSAO,agendarEm:agendarEm,dados:_dadosEnvio})});
       var d=await r.json();
       if (d.ok){ s.style.color='#f59e0b'; s.textContent='🕐 Agendado para '+d.horario; if(schedInput) schedInput.value=''; setTimeout(function(){s.textContent='';},8000); }
       else { s.style.color='#ff585e';s.textContent='Erro: '+(d.erro||'falha');setTimeout(function(){s.textContent='';},5000); }
       return;
     }
     // cdv_emissao: sempre envia só texto, nunca imagem
-    r=await fetch(SERVER+'/enviar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensagem:texto,grupo:GRUPO_EMISSAO})});
+    r=await fetch(SERVER+'/enviar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensagem:texto,grupo:GRUPO_EMISSAO,dados:_dadosEnvio})});
     var d=await r.json();
     if (d.ok){
       if (d.posicao > 0){s.style.color='#f59e0b';s.textContent='⏳ Na fila (pos. '+d.posicao+' — ~'+d.tempoMin+' min)';setTimeout(function(){s.textContent='';},10000);}
@@ -2149,10 +2171,166 @@ function _tipoPassagem(p) {
   return dv ? 'Ida e volta' : 'Somente ida';
 }
 
+// Tres origens possiveis, nesta ordem de precedencia:
+//  1. auto=true          → radar capturou no grupo monitorado E o gate de
+//                          auto-envio liberou sozinho (AUTO_ENVIO_ALERTA=on).
+//  2. fonte='emissao'    → montado a mao na aba Emissao do gerador.
+//  3. fonte='alerta'     → radar capturou, mas so saiu depois do OK humano na
+//                          aba Alertas (fila de aprovacao).
+// Registro antigo sem 'fonte' = lote importado da planilha; o proxy assume
+// 'emissao', entao cai no caso 2 — que e de fato a origem daqueles dados.
+var ENV_ORIGENS = {
+  auto:      {cls:'env-auto',   txt:'Auto (grupo)', ttl:'Capturado no grupo monitorado e enviado automaticamente pelo radar, sem intervenção.'},
+  aprovacao: {cls:'env-aprov',  txt:'Aprovação',    ttl:'Capturado no grupo monitorado e liberado manualmente na aba Alertas.'},
+  emissao:   {cls:'env-manual', txt:'Gerador',      ttl:'Montado à mão na aba Emissão do gerador.'},
+};
+
+function _chaveOrigem(p) {
+  if (p.auto === true) return 'auto';
+  if (p.fonte === 'emissao' || !p.fonte) return 'emissao';
+  return 'aprovacao';
+}
+
 function _origemEnvio(p) {
-  if (p.auto === true) return {cls:'env-auto',  txt:'Automático'};
-  if (p.fonte === 'emissao') return {cls:'env-manual', txt:'Emissão manual'};
-  return {cls:'env-aprov', txt:'Aprovação'};
+  return ENV_ORIGENS[_chaveOrigem(p)];
+}
+
+function _badgeOrigem(chave) {
+  var o = ENV_ORIGENS[chave] || ENV_ORIGENS.aprovacao;
+  return '<span class="env-badge ' + o.cls + '" title="' + escapeHtml(o.ttl) + '">' + o.txt + '</span>';
+}
+
+// ── PROGRAMADAS — aprovadas/agendadas que ainda NÃO saíram ───────────────────
+// Duas origens no baileys-server, ambas em memória (não estão em passagens.json,
+// porque passagens.json só recebe o que já foi publicado):
+//   • GET /fila-envio   → já liberadas, aguardando o intervalo de 10 min e a
+//                         janela 08h–21h SP. Traz previsão de horário.
+//   • GET /agendamentos → com horário marcado à mão (status 'aguardando').
+// Um agendamento de emissão, ao disparar, MIGRA para a fila de envio — por isso
+// nunca aparece nas duas listas ao mesmo tempo.
+
+function _fmtHoraTs(ts) {
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone:'America/Sao_Paulo', day:'2-digit', month:'2-digit',
+      hour:'2-digit', minute:'2-digit'
+    }).format(new Date(ts));
+  } catch(e) { return new Date(ts).toLocaleString('pt-BR'); }
+}
+
+async function cancelarProgramada(tipo, id) {
+  var oq = tipo === 'agendamento' ? 'este agendamento' : 'este item da fila de envio';
+  if (!confirm('Cancelar ' + oq + '? A mensagem não será publicada.')) return;
+  var url = tipo === 'agendamento'
+    ? SERVER + '/agendamentos/' + encodeURIComponent(id)
+    : SERVER + '/fila-envio/' + encodeURIComponent(id);
+  try {
+    var r = await fetch(url, {method:'DELETE'});
+    var d = await r.json();
+    if (!d.ok) { alert('Falha: ' + (d.erro || 'erro desconhecido')); return; }
+    carregarProgramadas();
+  } catch(e) { alert('Falha: ' + e.message); }
+}
+
+async function carregarProgramadas() {
+  var wrap = document.getElementById('env-programadas');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="alerta-empty">Carregando...</div>';
+
+  var itens = [];
+  var janela = '';
+  var foraJanela = false;
+
+  // As duas chamadas são independentes: se uma falhar, a outra ainda rende lista.
+  try {
+    var rf = await fetch(SERVER + '/fila-envio?t=' + Date.now(),
+                         {cache:'no-cache', signal:AbortSignal.timeout(15000)});
+    var df = await rf.json();
+    janela     = df.janelaEnvio || '';
+    foraJanela = df.dentroJanela === false;
+    (df.itens || []).forEach(function(it) {
+      if (it.tipoConteudo === 'cupom_tsp') return; // cupom TSP não é emissão
+      itens.push({
+        tipo:    'fila',
+        id:      it.ofertaId,
+        origem:  it.origemEnvio || 'aprovacao',
+        quando:  it.previsaoHorario || '—',
+        ordem:   Date.now() + (Number(it.previsaoMin) || 0) * 60000,
+        detalhe: '~' + (Number(it.previsaoMin) || 0) + ' min · pos. ' + it.posicao,
+        dados:   it.dados,
+        preview: it.preview || '',
+      });
+    });
+  } catch(e) { /* fila indisponível — segue com os agendamentos */ }
+
+  try {
+    var ra = await fetch(SERVER + '/agendamentos?t=' + Date.now(),
+                         {cache:'no-cache', signal:AbortSignal.timeout(15000)});
+    var da = await ra.json();
+    (da.agendamentos || []).forEach(function(ag) {
+      // ofertaId presente = veio da aprovação de um alerta; ausente = gerador.
+      var origem = ag.fonteRegistro === 'emissao' ? 'emissao'
+                 : (ag.ofertaId ? 'aprovacao' : 'emissao');
+      var d = ag.dados || null;
+      itens.push({
+        tipo:    'agendamento',
+        id:      ag.id,
+        origem:  origem,
+        quando:  _fmtHoraTs(ag.dispararEm),
+        ordem:   Number(ag.dispararEm) || 0,
+        detalhe: 'horário marcado' + (ag.grupo ? ' · ' + ag.grupo : ''),
+        dados:   d ? {
+          origem:d.origem||d.Origem||'', destino:d.destino||'', cia:d.cia||'',
+          programa:d.programa||'', pontos:Number(d.pontos)||0, cabine:d.cabine||'',
+          datasIda:d.datasIda||d.datas_ida||'', datasVolta:d.datasVolta||d.datas_volta||''
+        } : null,
+        preview: String(ag.mensagem || '').replace(/\s+/g,' ').slice(0,90),
+      });
+    });
+  } catch(e) { /* agendamentos indisponíveis */ }
+
+  var badge = document.getElementById('env-resumo-prog');
+  if (badge) badge.textContent = itens.length + ' programada(s)';
+
+  if (!itens.length) {
+    wrap.innerHTML = '<div class="alerta-empty">🕐 Nada na fila.<br><span style="font-size:12px;color:var(--muted2)">Ofertas aprovadas ou agendadas que ainda não chegaram no horário aparecem aqui.</span></div>';
+    return;
+  }
+
+  itens.sort(function(a,b){ return a.ordem - b.ordem; });
+
+  var aviso = foraJanela && janela
+    ? '<div style="font-size:11px;color:#f59e0b;margin-bottom:8px">⚠️ Fora da janela de envio (' + escapeHtml(janela) + '). A fila só volta a andar no início da janela.</div>'
+    : '';
+
+  wrap.innerHTML = aviso + '<div class="env-wrap"><table class="env-tab">'
+    + '<thead><tr>'
+    + '<th>Previsão</th><th>Rota</th><th>Tipo</th><th>Cabine</th>'
+    + '<th>Programa</th><th>Cia</th><th style="text-align:right">Pontos</th><th>Envio</th><th></th>'
+    + '</tr></thead><tbody>'
+    + itens.map(function(it) {
+        var acao = '<td style="text-align:right"><button class="env-x" title="Cancelar" '
+          + 'onclick="cancelarProgramada(\'' + it.tipo + '\',\'' + String(it.id).replace(/'/g,"") + '\')">✕</button></td>';
+        var quando = '<td class="env-prev" title="' + escapeHtml(it.detalhe) + '">' + escapeHtml(it.quando) + '</td>';
+        var d = it.dados;
+        // Sem dados estruturados (agendamento antigo ou envio avulso) a linha
+        // colapsa no preview da mensagem — melhor do que sumir da programação.
+        if (!d || !d.origem || !d.destino) {
+          return '<tr class="env-prog-row">' + quando
+            + '<td class="env-msg" colspan="6">' + (escapeHtml(it.preview) || '—') + '</td>'
+            + '<td>' + _badgeOrigem(it.origem) + '</td>' + acao + '</tr>';
+        }
+        var dv = String(d.datasVolta || '').replace(/[-\s]/g,'');
+        return '<tr class="env-prog-row">' + quando
+          + '<td class="env-rota">' + escapeHtml(d.origem) + ' → ' + escapeHtml(d.destino) + '</td>'
+          + '<td style="color:var(--muted)">' + (dv ? 'Ida e volta' : 'Somente ida') + '</td>'
+          + '<td>' + escapeHtml(d.cabine || 'Economica') + '</td>'
+          + '<td>' + escapeHtml(d.programa || '—') + '</td>'
+          + '<td style="color:var(--muted)">' + escapeHtml(d.cia || '—') + '</td>'
+          + '<td class="env-pts" style="text-align:right">' + (Number(d.pontos)||0).toLocaleString('pt-BR') + '</td>'
+          + '<td>' + _badgeOrigem(it.origem) + '</td>' + acao + '</tr>';
+      }).join('')
+    + '</tbody></table></div>';
 }
 
 async function carregarEnviadasHoje() {
@@ -2164,6 +2342,9 @@ async function carregarEnviadasHoje() {
   if (dataEl) dataEl.textContent = hoje.split('-').reverse().join('/');
   lista.innerHTML = '<div class="alerta-empty">Carregando...</div>';
   resumo.innerHTML = '';
+  // Roda em paralelo: a programação vem do baileys-server e a lista de enviadas
+  // do proxy — uma não deve esperar a outra.
+  carregarProgramadas();
   try {
     var r = await fetch(CDV_PROXY + '/passagens/listar?t=' + Date.now(),
                         {cache:'no-cache', signal:AbortSignal.timeout(15000)});
@@ -2183,19 +2364,21 @@ async function carregarEnviadasHoje() {
     doDia.sort(function(a,b){ return Date.parse(b.enviadoEm) - Date.parse(a.enviadoEm); });
 
     if (doDia.length === 0) {
-      resumo.innerHTML = '';
+      resumo.innerHTML = '<span><strong>0</strong> enviada(s) hoje</span>'
+        + '<span class="env-badge env-prog" id="env-resumo-prog" title="Aprovadas/agendadas aguardando o horário de envio.">— programada(s)</span>';
       lista.innerHTML = '<div class="alerta-empty">📭 Nenhuma emissão enviada hoje ainda.<br><span style="font-size:12px;color:var(--muted2)">Assim que uma emissão sair no grupo ela aparece aqui.</span></div>';
       return;
     }
 
-    var nAuto  = doDia.filter(function(p){ return p.auto === true; }).length;
-    var nMan   = doDia.filter(function(p){ return p.fonte === 'emissao'; }).length;
-    var nAprov = doDia.length - nAuto - nMan;
+    var nAuto  = doDia.filter(function(p){ return _chaveOrigem(p) === 'auto'; }).length;
+    var nAprov = doDia.filter(function(p){ return _chaveOrigem(p) === 'aprovacao'; }).length;
+    var nMan   = doDia.filter(function(p){ return _chaveOrigem(p) === 'emissao'; }).length;
     resumo.innerHTML =
-        '<span><strong>' + doDia.length + '</strong> emissão(ões) hoje</span>'
-      + '<span class="env-badge env-auto">' + nAuto + ' automático</span>'
-      + '<span class="env-badge env-aprov">' + nAprov + ' por aprovação</span>'
-      + (nMan ? '<span class="env-badge env-manual">' + nMan + ' emissão manual</span>' : '');
+        '<span><strong>' + doDia.length + '</strong> enviada(s) hoje</span>'
+      + '<span class="env-badge env-auto" title="' + escapeHtml(ENV_ORIGENS.auto.ttl) + '">' + nAuto + ' auto (grupo)</span>'
+      + '<span class="env-badge env-aprov" title="' + escapeHtml(ENV_ORIGENS.aprovacao.ttl) + '">' + nAprov + ' por aprovação</span>'
+      + '<span class="env-badge env-manual" title="' + escapeHtml(ENV_ORIGENS.emissao.ttl) + '">' + nMan + ' pelo gerador</span>'
+      + '<span class="env-badge env-prog" id="env-resumo-prog" title="Aprovadas/agendadas aguardando o horário de envio.">— programada(s)</span>';
 
     lista.innerHTML = '<div class="env-wrap"><table class="env-tab">'
       + '<thead><tr>'
@@ -2203,7 +2386,6 @@ async function carregarEnviadasHoje() {
       + '<th>Programa</th><th>Cia</th><th style="text-align:right">Pontos</th><th>Envio</th>'
       + '</tr></thead><tbody>'
       + doDia.map(function(p) {
-          var oe = _origemEnvio(p);
           var pts = Number(p.pontos) || 0;
           return '<tr>'
             + '<td style="color:var(--muted)">' + _horaSP(p.enviadoEm) + '</td>'
@@ -2213,7 +2395,7 @@ async function carregarEnviadasHoje() {
             + '<td>' + escapeHtml(p.programa || '—') + '</td>'
             + '<td style="color:var(--muted)">' + escapeHtml(p.cia || '—') + '</td>'
             + '<td class="env-pts" style="text-align:right">' + pts.toLocaleString('pt-BR') + '</td>'
-            + '<td><span class="env-badge ' + oe.cls + '">' + oe.txt + '</span></td>'
+            + '<td>' + _badgeOrigem(_chaveOrigem(p)) + '</td>'
             + '</tr>';
         }).join('')
       + '</tbody></table></div>';
