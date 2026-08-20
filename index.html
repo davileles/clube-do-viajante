@@ -173,6 +173,7 @@ body[data-tema="light"] .camp-passo.ok .camp-num{background:#16a34a;border-color
 .env-pts{font-variant-numeric:tabular-nums;font-weight:700}
 .env-badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:20px;white-space:nowrap}
 .env-auto{background:rgba(34,197,94,.14);color:#22c55e}
+.env-coleta{background:rgba(45,212,191,.14);color:#2dd4bf}
 .env-aprov{background:rgba(245,158,11,.14);color:#f59e0b}
 .env-manual{background:rgba(96,165,250,.14);color:#60a5fa}
 .env-prog{background:rgba(167,139,250,.14);color:#a78bfa}
@@ -2181,11 +2182,16 @@ function _tipoPassagem(p) {
 // 'emissao', entao cai no caso 2 — que e de fato a origem daqueles dados.
 var ENV_ORIGENS = {
   auto:      {cls:'env-auto',   txt:'Auto (grupo)', ttl:'Capturado no grupo monitorado e enviado automaticamente pelo radar, sem intervenção.'},
+  coleta:    {cls:'env-coleta', txt:'Auto (coleta)', ttl:'Encontrado pela varredura seats.aero (Cowork) e enviado automaticamente — não passou por grupo monitorado.'},
   aprovacao: {cls:'env-aprov',  txt:'Aprovação',    ttl:'Capturado no grupo monitorado e liberado manualmente na aba Alertas.'},
   emissao:   {cls:'env-manual', txt:'Gerador',      ttl:'Montado à mão na aba Emissão do gerador.'},
 };
 
 function _chaveOrigem(p) {
+  // captura:'coleta' = veio da varredura seats.aero injetada no baileys-server.
+  // Sai automático igual ao radar, mas não passou por grupo monitorado nenhum —
+  // sem esta linha os dois casos apareciam como "Auto (grupo)".
+  if (p.auto === true && p.captura === 'coleta') return 'coleta';
   if (p.auto === true) return 'auto';
   if (p.fonte === 'emissao' || !p.fonte) return 'emissao';
   return 'aprovacao';
@@ -2370,12 +2376,14 @@ async function carregarEnviadasHoje() {
       return;
     }
 
-    var nAuto  = doDia.filter(function(p){ return _chaveOrigem(p) === 'auto'; }).length;
+    var nAuto   = doDia.filter(function(p){ return _chaveOrigem(p) === 'auto'; }).length;
+    var nColeta = doDia.filter(function(p){ return _chaveOrigem(p) === 'coleta'; }).length;
     var nAprov = doDia.filter(function(p){ return _chaveOrigem(p) === 'aprovacao'; }).length;
     var nMan   = doDia.filter(function(p){ return _chaveOrigem(p) === 'emissao'; }).length;
     resumo.innerHTML =
         '<span><strong>' + doDia.length + '</strong> enviada(s) hoje</span>'
       + '<span class="env-badge env-auto" title="' + escapeHtml(ENV_ORIGENS.auto.ttl) + '">' + nAuto + ' auto (grupo)</span>'
+      + '<span class="env-badge env-coleta" title="' + escapeHtml(ENV_ORIGENS.coleta.ttl) + '">' + nColeta + ' auto (coleta)</span>'
       + '<span class="env-badge env-aprov" title="' + escapeHtml(ENV_ORIGENS.aprovacao.ttl) + '">' + nAprov + ' por aprovação</span>'
       + '<span class="env-badge env-manual" title="' + escapeHtml(ENV_ORIGENS.emissao.ttl) + '">' + nMan + ' pelo gerador</span>'
       + '<span class="env-badge env-prog" id="env-resumo-prog" title="Aprovadas/agendadas aguardando o horário de envio.">— programada(s)</span>';
