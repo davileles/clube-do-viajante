@@ -2873,7 +2873,8 @@ function renderOfertaPendenteCard(o) {
       +'</div>'
     +'</div>'
     +'<div class="alerta-footer">'
-    +'<button class="btn btn-aprovar" style="flex:1;padding:10px" onclick="aprovarOfertaPendente(\''+o.id+'\')">✓ Aprovar para o Radar</button>'
+    +'<button class="btn btn-aprovar" style="flex:1 1 220px;padding:10px" onclick="aprovarOfertaPendente(\''+o.id+'\', true)">✓ Aprovar para o Radar e WhatsApp</button>'
+    +'<button class="btn" style="flex:1 1 180px;padding:10px;background:var(--surface2);color:var(--text);border:1px solid var(--border2)" onclick="aprovarOfertaPendente(\''+o.id+'\', false)" title="Publica no Radar e registra histórico/alertas, sem enviar mensagem no WhatsApp">📡 Aprovar só para o Radar</button>'
     +'<button class="btn btn-rejeitar" style="flex:0 0 auto;padding:10px 16px" onclick="rejeitarOfertaPendente(\''+o.id+'\')">✕ Rejeitar (bloquear)</button>'
     +'<span class="alerta-fb" id="oferta-fb-'+o.id+'"></span>'
     +'</div>'
@@ -3011,9 +3012,12 @@ function montarMensagemRadar(o) {
   return msg;
 }
 
-async function aprovarOfertaPendente(id) {
+// enviarWhats=true  -> publica no Radar + registra histórico/alertas + enfileira envio no WhatsApp
+// enviarWhats=false -> publica no Radar + registra histórico/alertas, SEM WhatsApp
+async function aprovarOfertaPendente(id, enviarWhats) {
+  if (enviarWhats === undefined) enviarWhats = true;
   var fb = document.getElementById('oferta-fb-'+id);
-  fb.style.color='var(--muted)'; fb.textContent='Aprovando...';
+  fb.style.color='var(--muted)'; fb.textContent = enviarWhats ? 'Aprovando...' : 'Aprovando (só Radar)...';
   try {
     var edits = coletarEdicoesOferta(id);
     var r = await fetch(CDV_PROXY+'/ofertas/aprovar', {
@@ -3035,6 +3039,18 @@ async function aprovarOfertaPendente(id) {
       // Desabilitar card IMEDIATAMENTE ao aprovar
       var cardImediato = document.getElementById('oferta-card-'+id);
       if (cardImediato) { cardImediato.style.opacity = '.35'; cardImediato.style.pointerEvents = 'none'; }
+
+      if (!enviarWhats) {
+        // Modo "só Radar": a oferta já foi publicada em ofertas.json e o histórico/alertas
+        // já foram registrados pelo endpoint /ofertas/aprovar. Não enfileira no WhatsApp.
+        fb.style.color='#22c55e'; fb.textContent='✓ Publicada no Radar (sem WhatsApp)';
+        setTimeout(function() {
+          var cardR = document.getElementById('oferta-card-'+id);
+          if (cardR) { cardR.style.transition='opacity .4s'; cardR.style.opacity='0'; setTimeout(function(){cardR.remove();},420); }
+        }, 2000);
+        return;
+      }
+
       fb.style.color='var(--muted)'; fb.textContent='Enfileirando no servidor...';
 
       // Enfileirar no servidor — o envio ocorre lá, independente de o browser estar aberto
