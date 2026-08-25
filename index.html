@@ -189,6 +189,29 @@ body[data-tema="light"] .camp-passo.ok .camp-num{background:#16a34a;border-color
 .env-msg{color:var(--muted2);font-style:italic;white-space:normal;max-width:520px}
 .env-resumo{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted);margin-bottom:12px}
 .env-resumo strong{color:var(--text);font-size:15px}
+.env-tab tr.env-dbl{cursor:pointer}
+.env-tab tr.env-dbl:hover td{background:var(--surface2)}
+#modal-datas{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;align-items:center;justify-content:center;padding:16px}
+.dt-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;max-width:620px;width:100%;max-height:84vh;display:flex;flex-direction:column}
+.dt-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--border)}
+.dt-rota{font-size:16px;font-weight:800;color:var(--text)}
+.dt-sub{font-size:12px;color:var(--muted);margin-top:5px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dt-x{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:0 2px}
+.dt-x:hover{color:var(--accent)}
+.dt-body{padding:16px 20px 20px;overflow-y:auto}
+.dt-sec{margin-bottom:18px}
+.dt-sec:last-child{margin-bottom:0}
+.dt-sec-h{font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:800;color:var(--muted2);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.dt-sec-h .dt-n{background:var(--surface2);color:var(--muted);border-radius:20px;padding:2px 8px;font-size:10px;letter-spacing:.3px}
+.dt-mes{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed var(--border)}
+.dt-mes:last-child{border-bottom:none}
+.dt-mes-nome{font-size:11px;font-weight:800;color:var(--muted);min-width:64px;padding-top:3px;text-transform:capitalize;white-space:nowrap}
+.dt-dias{display:flex;flex-wrap:wrap;gap:5px}
+.dt-dia{background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:700;color:var(--text);padding:2px 7px;font-variant-numeric:tabular-nums}
+.dt-vazio{font-size:12px;color:var(--muted2);font-style:italic}
+.dt-foot{border-top:1px solid var(--border);padding:12px 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.dt-copy{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:8px;font-size:11px;font-weight:800;padding:6px 12px;cursor:pointer}
+.dt-copy:hover{border-color:var(--border2);color:var(--text)}
 .alerta-buffer{background:rgba(255,88,94,.08);border:1px solid rgba(255,88,94,.25);border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .spin{display:inline-block;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -464,7 +487,7 @@ body[data-tema="light"] textarea.out{color:var(--text)}
 <!-- ══ PAINEL ENVIADAS HOJE ══ -->
 <div class="main-panel" id="panel-enviadas">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap">
-    <div style="font-size:12px;color:var(--muted2)">Emissões que saíram no grupo <strong style="color:var(--muted)">hoje</strong> (<span id="env-data">—</span>) e o que ainda está <strong style="color:var(--muted)">programado</strong>. A lista de enviadas zera à meia-noite.</div>
+    <div style="font-size:12px;color:var(--muted2)">Emissões que saíram no grupo <strong style="color:var(--muted)">hoje</strong> (<span id="env-data">—</span>) e o que ainda está <strong style="color:var(--muted)">programado</strong>. A lista de enviadas zera à meia-noite. <span style="color:var(--muted)">Duplo clique numa linha abre as datas de disponibilidade.</span></div>
     <button class="btn" style="background:#3f3f3f;color:#aaa;font-size:12px;padding:7px 14px;width:auto;margin:0" onclick="carregarEnviadasHoje()">↻ Atualizar</button>
   </div>
   <div class="env-resumo" id="env-resumo"></div>
@@ -2349,6 +2372,7 @@ async function carregarProgramadas() {
   }
 
   itens.sort(function(a,b){ return a.ordem - b.ordem; });
+  window._envProgCache = itens;
 
   var aviso = foraJanela && janela
     ? '<div style="font-size:11px;color:#f59e0b;margin-bottom:8px">⚠️ Fora da janela de envio (' + escapeHtml(janela) + '). A fila só volta a andar no início da janela.</div>'
@@ -2359,7 +2383,7 @@ async function carregarProgramadas() {
     + '<th>Previsão</th><th>Rota</th><th>Tipo</th><th>Cabine</th>'
     + '<th>Programa</th><th>Cia</th><th style="text-align:right">Pontos</th><th>Envio</th><th></th>'
     + '</tr></thead><tbody>'
-    + itens.map(function(it) {
+    + itens.map(function(it, i) {
         var acao = '<td style="text-align:right"><button class="env-x" title="Cancelar" '
           + 'onclick="cancelarProgramada(\'' + it.tipo + '\',\'' + String(it.id).replace(/'/g,"") + '\')">✕</button></td>';
         var quando = '<td class="env-prev" title="' + escapeHtml(it.detalhe) + '">' + escapeHtml(it.quando) + '</td>';
@@ -2367,12 +2391,12 @@ async function carregarProgramadas() {
         // Sem dados estruturados (agendamento antigo ou envio avulso) a linha
         // colapsa no preview da mensagem — melhor do que sumir da programação.
         if (!d || !d.origem || !d.destino) {
-          return '<tr class="env-prog-row">' + quando
+          return '<tr class="env-prog-row env-dbl" title="Duplo clique para ver as datas de disponibilidade" ondblclick="abrirDatasEnvio(\'prog\',' + i + ')">' + quando
             + '<td class="env-msg" colspan="6">' + (escapeHtml(it.preview) || '—') + '</td>'
             + '<td>' + _badgeOrigem(it.origem) + '</td>' + acao + '</tr>';
         }
         var dv = String(d.datasVolta || '').replace(/[-\s]/g,'');
-        return '<tr class="env-prog-row">' + quando
+        return '<tr class="env-prog-row env-dbl" title="Duplo clique para ver as datas de disponibilidade" ondblclick="abrirDatasEnvio(\'prog\',' + i + ')">' + quando
           + '<td class="env-rota">' + escapeHtml(d.origem) + ' → ' + escapeHtml(d.destino) + '</td>'
           + '<td style="color:var(--muted)">' + (dv ? 'Ida e volta' : 'Somente ida') + '</td>'
           + '<td>' + escapeHtml(d.cabine || 'Economica') + '</td>'
@@ -2413,6 +2437,8 @@ async function carregarEnviadasHoje() {
       return isFinite(t) && _diaSP(new Date(t)) === hoje;
     });
     doDia.sort(function(a,b){ return Date.parse(b.enviadoEm) - Date.parse(a.enviadoEm); });
+    // Cache para o modal de datas (duplo clique na linha usa o indice deste array).
+    window._envHojeCache = doDia;
 
     if (doDia.length === 0) {
       resumo.innerHTML = '<span><strong>0</strong> enviada(s) hoje</span>'
@@ -2438,9 +2464,9 @@ async function carregarEnviadasHoje() {
       + '<th>Hora</th><th>Rota</th><th>Tipo</th><th>Cabine</th>'
       + '<th>Programa</th><th>Cia</th><th style="text-align:right">Pontos</th><th>Envio</th>'
       + '</tr></thead><tbody>'
-      + doDia.map(function(p) {
+      + doDia.map(function(p, i) {
           var pts = Number(p.pontos) || 0;
-          return '<tr>'
+          return '<tr class="env-dbl" title="Duplo clique para ver as datas de disponibilidade" ondblclick="abrirDatasEnvio(\'env\',' + i + ')">'
             + '<td style="color:var(--muted)">' + _horaSP(p.enviadoEm) + '</td>'
             + '<td class="env-rota">' + escapeHtml(p.origem||'?') + ' → ' + escapeHtml(p.destino||'?') + '</td>'
             + '<td style="color:var(--muted)">' + _tipoPassagem(p) + '</td>'
@@ -2456,6 +2482,147 @@ async function carregarEnviadasHoje() {
     lista.innerHTML = '<div class="alerta-empty">⚠️ Falha ao carregar: ' + escapeHtml(e.message) + '</div>';
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODAL DE DATAS DE DISPONIBILIDADE — duplo clique numa linha de "Enviadas hoje"
+// (ou de "Programadas") abre o detalhamento das datas daquela emissão.
+// Os campos datas_ida/datas_volta chegam como texto livre no mesmo formato da
+// mensagem publicada: "Nov/26: 4, 5, 6; Dez/26: 1, 2". O separador entre meses
+// varia entre ';' e ',' conforme a origem do alerta, por isso o parser localiza
+// os cabeçalhos "Mes/AA:" e fatia o texto entre eles em vez de dar split fixo.
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _parseDatasDisp(txt) {
+  var s = String(txt || '').replace(/\s+/g, ' ').trim();
+  if (!s) return [];
+  var re = /([A-Za-zÀ-ÿ]{3,12}\.?\/\d{2,4})\s*:/g;
+  var heads = [], m;
+  while ((m = re.exec(s)) !== null) heads.push({mes: m[1], ini: m.index, fim: re.lastIndex});
+  // Sem cabeçalho de mês (formato antigo/avulso): devolve a lista crua.
+  if (!heads.length) {
+    return [{mes: '', dias: s.split(/[;,]/).map(function(t){return t.trim();}).filter(Boolean)}];
+  }
+  return heads.map(function(h, i) {
+    var corpo = s.slice(h.fim, i + 1 < heads.length ? heads[i + 1].ini : s.length);
+    var dias = corpo.split(/[;,]/).map(function(t) {
+      return t.trim().replace(/[;,.]+$/, '');
+    }).filter(Boolean);
+    return {mes: h.mes, dias: dias};
+  }).filter(function(g){ return g.dias.length; });
+}
+
+function _blocoDatas(titulo, txt) {
+  var grupos = _parseDatasDisp(txt);
+  var head = '<div class="dt-sec-h">' + titulo;
+  if (!grupos.length) {
+    return '<div class="dt-sec">' + head + '</div>'
+      + '<div class="dt-vazio">Sem datas registradas para este trecho.</div></div>';
+  }
+  var n = grupos.reduce(function(a, g){ return a + g.dias.length; }, 0);
+  head += '<span class="dt-n">' + n + ' data' + (n === 1 ? '' : 's') + '</span></div>';
+  var corpo = grupos.map(function(g) {
+    return '<div class="dt-mes">'
+      + '<div class="dt-mes-nome">' + escapeHtml(g.mes || '—') + '</div>'
+      + '<div class="dt-dias">' + g.dias.map(function(d) {
+          return '<span class="dt-dia">' + escapeHtml(d) + '</span>';
+        }).join('') + '</div>'
+      + '</div>';
+  }).join('');
+  return '<div class="dt-sec">' + head + corpo + '</div>';
+}
+
+// Normaliza os dois formatos que alimentam a tela: registro de passagens.json
+// (snake_case, já enviado) e item da fila/agendamento (camelCase, programado).
+function _normalizaLinhaEnvio(fonte, o) {
+  if (!o) return null;
+  if (fonte === 'prog') {
+    var d = o.dados || {};
+    return {
+      origem: d.origem || '', destino: d.destino || '',
+      cia: d.cia || '', programa: d.programa || '',
+      pontos: Number(d.pontos) || 0, cabine: d.cabine || '',
+      datasIda: d.datasIda || d.datas_ida || '',
+      datasVolta: d.datasVolta || d.datas_volta || '',
+      quando: 'Previsão: ' + (o.quando || '—'),
+      badge: _badgeOrigem(o.origem || 'aprovacao'),
+      preview: o.preview || ''
+    };
+  }
+  return {
+    origem: o.origem || '', destino: o.destino || '',
+    cia: o.cia || '', programa: o.programa || '',
+    pontos: Number(o.pontos) || 0, cabine: o.cabine || '',
+    datasIda: o.datas_ida || o.datasIda || '',
+    datasVolta: o.datas_volta || o.datasVolta || '',
+    quando: 'Enviada às ' + _horaSP(o.enviadoEm),
+    badge: _badgeOrigem(_chaveOrigem(o)),
+    preview: ''
+  };
+}
+
+var _dtTextoAtual = '';
+
+function abrirDatasEnvio(fonte, idx) {
+  var cache = fonte === 'prog' ? (window._envProgCache || []) : (window._envHojeCache || []);
+  var o = _normalizaLinhaEnvio(fonte, cache[idx]);
+  if (!o) return;
+  var modal = document.getElementById('modal-datas');
+  if (!modal) return;
+
+  var rota = (o.origem || '?') + ' → ' + (o.destino || '?');
+  document.getElementById('dt-rota').textContent = rota;
+
+  var temVolta = !!String(o.datasVolta || '').replace(/[-\s]/g, '');
+  document.getElementById('dt-sub').innerHTML =
+      '<span>' + escapeHtml(o.quando) + '</span>'
+    + '<span>·</span><span>' + escapeHtml(o.programa || '—') + (o.cia ? ' / ' + escapeHtml(o.cia) : '') + '</span>'
+    + '<span>·</span><span>' + escapeHtml(o.cabine || 'Economica') + '</span>'
+    + '<span>·</span><span style="font-weight:700;color:var(--text)">' + o.pontos.toLocaleString('pt-BR') + ' pts</span>'
+    + '<span>·</span><span>' + (temVolta ? 'Ida e volta' : 'Somente ida') + '</span>'
+    + o.badge;
+
+  var corpo = _blocoDatas('🛫 Datas de ida', o.datasIda);
+  if (temVolta) corpo += _blocoDatas('🛬 Datas de volta', o.datasVolta);
+  if (!o.datasIda && !temVolta && o.preview) {
+    corpo += '<div class="dt-sec"><div class="dt-sec-h">Mensagem</div>'
+      + '<div class="dt-vazio">' + escapeHtml(o.preview) + '</div></div>';
+  }
+  document.getElementById('dt-body').innerHTML = corpo;
+
+  _dtTextoAtual = rota + '\n' + (o.datasIda ? '🛫 Ida: ' + o.datasIda : '')
+    + (temVolta ? '\n🛬 Volta: ' + o.datasVolta : '');
+  modal.style.display = 'flex';
+}
+
+function fecharDatasEnvio() {
+  var m = document.getElementById('modal-datas');
+  if (m) m.style.display = 'none';
+}
+
+function copiarDatasEnvio() {
+  var btn = document.getElementById('dt-copy-btn');
+  var txt = (_dtTextoAtual || '').trim();
+  if (!txt) return;
+  var done = function() {
+    if (!btn) return;
+    var antes = btn.textContent;
+    btn.textContent = '✓ Copiado';
+    setTimeout(function(){ btn.textContent = antes; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(done, function(){ alert(txt); });
+  } else {
+    // Fallback para contexto sem clipboard API (http, WebView antiga).
+    var ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch(e) { alert(txt); }
+    document.body.removeChild(ta);
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') fecharDatasEnvio();
+});
 
 function renderAlertaCardProcessado(o) {
   var d = o.dadosExtraidos || {};
@@ -4352,6 +4519,23 @@ window.addEventListener('DOMContentLoaded', function() {
     </div>
     <p style="font-size:12px;color:var(--muted2);margin:0 0 14px">Selecione a segunda oferta para combinar. As mensagens formatadas serão unidas e você poderá revisar antes de aprovar.</p>
     <div id="mesclar-lista"></div>
+  </div>
+</div>
+<!-- Modal Datas de Disponibilidade (duplo clique nas linhas de Enviadas hoje) -->
+<div id="modal-datas" onclick="if(event.target===this)fecharDatasEnvio()">
+  <div class="dt-box">
+    <div class="dt-head">
+      <div>
+        <div class="dt-rota" id="dt-rota">—</div>
+        <div class="dt-sub" id="dt-sub"></div>
+      </div>
+      <button class="dt-x" onclick="fecharDatasEnvio()" title="Fechar (Esc)">&times;</button>
+    </div>
+    <div class="dt-body" id="dt-body"></div>
+    <div class="dt-foot">
+      <button class="dt-copy" id="dt-copy-btn" onclick="copiarDatasEnvio()">Copiar datas</button>
+      <span style="font-size:11px;color:var(--muted2)">Datas conforme registradas no envio da emissão.</span>
+    </div>
   </div>
 </div>
 </body>
