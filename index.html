@@ -722,8 +722,11 @@ var BALCAO_LINK   = '`Faça parte do Balcão clicando aqui: https://pay.hub.la/T
 // Alerta). Ordem alfabetica por convencao de UI do CDV.
 var PROGRAMAS_EMISSAO = ['AAdvantage','Aeroplan','Azul Fidelidade','Azul pelo Mundo','Executive Club','Finnair Plus','Flying Club','Iberia Plus','LATAM Pass','Privilege Club','Smiles','SUMA','TAP'];
 
+// ATENCAO: espelhar qualquer alteracao em baileys-server/server.js
+// (PROGRAMAS_CPM), que monta as emissoes automaticas dos grupos monitorados.
+// As duas tabelas ja divergiram uma vez -- Smiles ficou 18 aqui e 16 la.
 var PROGRAMAS_CPM = {
-  'Smiles':18,'Azul Fidelidade':15,'Azul pelo Mundo':15,
+  'Smiles':16,'Azul Fidelidade':15,'Azul pelo Mundo':15,
   'LATAM Pass':26,'Iberia Plus':58,'Privilege Club':58,
   'Executive Club':58,'TAP':43,'AAdvantage':100,'SUMA':80,
   'Flying Club':50,'Finnair Plus':58,'Aeroplan':50
