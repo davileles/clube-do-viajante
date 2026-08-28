@@ -731,7 +731,18 @@ var PROGRAMAS_CPM = {
 // Links mascarados do Clube do Viajante. O destino real (com os parametros de
 // afiliado) vive em painel-cdv/links.json e e resolvido pelo endpoint /ir do
 // proxy Railway. Para trocar um destino NAO mexa aqui: edite links.json.
-var IR_BASE = 'https://ir.clubedoviajante.com.br/';
+//
+// TEMPORARIO (28/08/2026): ir.clubedoviajante.com.br NAO esta cadastrado como
+// custom domain no Railway -- o plano permite 2 e os slots estao ocupados por
+// grupo.tudosobrepromos.com e ir.ticapromos.com.br. Enquanto isso os links saem
+// no dominio nativo do proxy: mesmos slugs, mesmo links.json, mesmos cliques em
+// /ir-stats. So perde a mascara. Quando grupo.tudosobrepromos.com for desligado,
+// cadastre ir.clubedoviajante.com.br no Railway, ajuste o CNAME na Hostinger e
+// reverta esta linha para 'https://ir.clubedoviajante.com.br/' -- nada mais
+// precisa mudar, o guard de host abaixo se ajusta sozinho.
+var IR_BASE = 'https://cdv-proxy-production.up.railway.app/ir/';
+// Host do IR_BASE vigente, para nao mascarar duas vezes uma URL ja mascarada.
+var IR_HOST = (function(){ try { return new URL(IR_BASE).hostname.toLowerCase(); } catch(e) { return ''; } })();
 var PROGRAMAS_SLUG = {
   'Smiles':'smiles',
   'Azul Fidelidade':'azul',
@@ -776,7 +787,7 @@ function afiliarLink(url, origem) {
   try { u = new URL(String(url).trim()); } catch(e) { return url; }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return url;
   var host = u.hostname.toLowerCase();
-  if (host === 'ir.clubedoviajante.com.br') return url; // ja mascarado
+  if (host === IR_HOST || host === 'ir.clubedoviajante.com.br') return url; // ja mascarado
   // Campanha fixa conhecida -> slug dedicado no modo destino padrao (sem ?u=)
   var slugFixo = PATH_SLUG[host.replace(/^www\./,'') + u.pathname.replace(/\/+$/,'')];
   if (slugFixo) return IR_BASE + slugFixo + (origem ? '?o='+encodeURIComponent(origem) : '');
