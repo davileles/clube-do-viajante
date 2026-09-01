@@ -768,11 +768,32 @@ body[data-tema="light"] textarea.out{color:var(--text)}
       <button class="camp-mini" style="padding:10px 14px;margin-top:4px" onclick="cfgAddAdmin()">+ Adicionar admin</button>
 
       <div class="camp-sec">Quem dispara</div>
+      <p class="cfg-ajuda">
+        Este é o número <b>que envia</b> — o único que precisa estar pareado por QR e dentro dos grupos de destino.
+        Os telefones dos admins acima só <b>recebem</b>: não se conectam a nada.
+      </p>
       <div class="field">
         <label>Conta de WhatsApp do CDV</label>
         <select id="cfg-conta"></select>
       </div>
-      <p class="cfg-ajuda">Conta indisponível na hora do envio cai na principal: a mensagem sair pelo número errado é menos grave do que não sair.</p>
+      <div id="cfg-conta-status" style="font-size:12px;margin:9px 0"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="camp-mini" onclick="cfgQrConta()">📱 Parear / ver QR</button>
+        <button class="camp-mini" onclick="cfgConferirConta()">🔍 Conferir grupos</button>
+        <button class="camp-mini" onclick="cfgRecarregarContas()">↻ Atualizar status</button>
+      </div>
+      <div id="cfg-conta-fb" style="font-size:12px;margin-top:10px"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:12px">
+        <div class="field" style="flex:1">
+          <label>Parear um número novo</label>
+          <input type="text" id="cfg-conta-nova" placeholder="apelido — ex.: cdv2" autocomplete="off"/>
+        </div>
+        <button class="camp-mini" style="padding:10px 14px" onclick="cfgParearNova()">+ Parear</button>
+      </div>
+      <p class="cfg-ajuda" style="margin-top:10px">
+        Conta indisponível na hora do envio cai na principal: a mensagem sair pelo número errado é menos grave do que não sair.
+        Por isso vale conferir os grupos — uma conta pareada mas fora do grupo de destino falha em silêncio, com o disparo saindo pela principal.
+      </p>
 
       <button class="btn btn-blue" style="margin-top:14px" onclick="cfgSalvar()">💾 Salvar configuração</button>
       <div id="cfg-fb" style="font-size:12.5px;margin-top:10px;text-align:center"></div>
@@ -4716,6 +4737,141 @@ function cfgRemoverAdmin(i) {
   cfgSujo();
 }
 
+// Apelido da conta, no mesmo formato que o servidor aceita em /contas/:id.
+var CFG_RE_APELIDO = /^[a-z0-9_-]{2,24}$/i;
+
+function cfgContaSelecionada() {
+  var el = document.getElementById('cfg-conta');
+  return el ? el.value : '';
+}
+
+function cfgContaFb(msg, cor) {
+  var fb = document.getElementById('cfg-conta-fb');
+  fb.style.color = cor || 'var(--muted)';
+  fb.innerHTML = msg;
+}
+
+// Status da conta escolhida, logo abaixo do select: sem isto, "escolhi a conta
+// e nao dispara" nao tem resposta na tela — a conta pode estar cadastrada e
+// desconectada, e o envio cai na principal sem avisar ninguem.
+function cfgRenderStatusConta() {
+  var alvo = document.getElementById('cfg-conta-status');
+  var sel = cfgContaSelecionada();
+  if (!sel) {
+    alvo.innerHTML = '<span style="color:var(--muted2)">Conta principal — a mesma que lê os grupos monitorados.</span>';
+    return;
+  }
+  var ct = CFG_CONTAS.filter(function(x){ return x.id === sel; })[0];
+  if (!ct) {
+    alvo.innerHTML = '<span style="color:#ffb454">⚠️ Conta "' + cfgEsc(sel) + '" não está pareada. '
+                   + 'Enquanto não parear, os disparos saem pela principal.</span>';
+  } else if (ct.conectado) {
+    alvo.innerHTML = '<span style="color:#3ddc84">✓ Conectada.</span>';
+  } else {
+    alvo.innerHTML = '<span style="color:#ffb454">⚠️ Pareada, mas desconectada agora. '
+                   + 'Use “Parear / ver QR” para reconectar.</span>';
+  }
+}
+
+// Releitura do status sem passar pelo /config-cdv: recarregar a config inteira
+// jogaria fora as edições ainda não salvas desta tela.
+async function cfgRecarregarContas() {
+  cfgContaFb('Consultando o servidor…');
+  try {
+    var r = await fetch(SERVER + '/contas?t=' + Date.now(),
+                        { cache:'no-cache', signal:AbortSignal.timeout(15000) });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.erro || 'resposta inválida');
+    CFG_CONTAS = j.extras || [];
+    cfgRenderContas();
+    var principalOk = j.principal && j.principal.conectado;
+    cfgContaFb('Principal: ' + (principalOk ? '<b style="color:#3ddc84">conectada</b>' : '<b style="color:#ff9a9d">desconectada</b>')
+             + ' · ' + CFG_CONTAS.length + ' conta(s) secundária(s).');
+  } catch (e) {
+    cfgContaFb('Não consegui consultar: ' + cfgEsc(e.message), '#ff9a9d');
+  }
+}
+
+// Abre a página de QR do servidor numa aba nova. Para conta secundária é
+// preciso mandar conectar antes: o GET do QR não cria a conta de propósito —
+// uma aba esquecida aberta ressuscitaria conta já excluída a cada refresh.
+async function cfgQrConta() {
+  var sel = cfgContaSelecionada();
+  if (!sel) { window.open(SERVER + '/qr', '_blank'); return; }
+  cfgContaFb('Preparando o pareamento de "' + cfgEsc(sel) + '"…');
+  try {
+    var r = await fetch(SERVER + '/contas/' + encodeURIComponent(sel) + '/conectar',
+                        { method:'POST', signal:AbortSignal.timeout(20000) });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.erro || 'falha ao conectar');
+    window.open(SERVER + '/contas/' + encodeURIComponent(sel) + '/qr', '_blank');
+    cfgContaFb('QR aberto em outra aba. No celular: WhatsApp → Dispositivos conectados → Conectar dispositivo.');
+  } catch (e) {
+    cfgContaFb('Não consegui abrir o QR: ' + cfgEsc(e.message), '#ff9a9d');
+  }
+}
+
+async function cfgParearNova() {
+  var el = document.getElementById('cfg-conta-nova');
+  var ap = (el.value || '').trim();
+  if (!CFG_RE_APELIDO.test(ap)) {
+    cfgContaFb('Apelido inválido: de 2 a 24 caracteres, só letras sem acento, números, - e _.', '#ff9a9d');
+    return;
+  }
+  cfgContaFb('Criando "' + cfgEsc(ap) + '" e gerando o QR…');
+  try {
+    var r = await fetch(SERVER + '/contas/' + encodeURIComponent(ap) + '/conectar',
+                        { method:'POST', signal:AbortSignal.timeout(20000) });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.erro || 'falha ao criar a conta');
+    window.open(SERVER + '/contas/' + encodeURIComponent(ap) + '/qr', '_blank');
+    el.value = '';
+    await cfgRecarregarContas();
+    // Parear é só metade: a conta ainda precisa ser escolhida e salva, senão
+    // continua tudo saindo pela principal.
+    var sel = document.getElementById('cfg-conta');
+    sel.value = ap;
+    cfgRenderStatusConta();
+    cfgSujo();
+    cfgContaFb('QR aberto em outra aba. Depois de parear, clique em <b>Salvar configuração</b> para o CDV passar a disparar por "' + cfgEsc(ap) + '".');
+  } catch (e) {
+    cfgContaFb('Não consegui parear: ' + cfgEsc(e.message), '#ff9a9d');
+  }
+}
+
+// A conta está DENTRO dos grupos? Pareada e fora do grupo de destino, o envio
+// falha e cai na principal — sai pelo número errado, sem erro na tela.
+async function cfgConferirConta() {
+  var sel = cfgContaSelecionada() || 'principal';
+  cfgContaFb('Conferindo os grupos de "' + cfgEsc(sel) + '"… (leva alguns segundos)');
+  try {
+    var r = await fetch(SERVER + '/config-cdv/conta/' + encodeURIComponent(sel) + '/grupos?t=' + Date.now(),
+                        { cache:'no-cache', signal:AbortSignal.timeout(45000) });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.erro || 'falha na conferência');
+    var html = '';
+    var faltaD = j.destinos.faltando || [];
+    if (!faltaD.length) {
+      html += '<div style="color:#3ddc84">✓ Está nos ' + j.destinos.conferidos + ' grupo(s) de destino — pode disparar.</div>';
+    } else {
+      html += '<div style="color:#ff9a9d">✗ Fora de ' + faltaD.length + ' grupo(s) de destino. '
+            + 'O disparo para eles vai falhar e cair na principal:</div><ul style="margin:6px 0 0 18px;padding:0">';
+      faltaD.forEach(function(g) {
+        html += '<li style="font-size:11.5px;color:var(--muted)">' + cfgEsc(g.nome || g.jid) + '</li>';
+      });
+      html += '</ul>';
+    }
+    var faltaM = j.monitorados.faltando || [];
+    html += '<div style="margin-top:9px;font-size:11.5px;color:var(--muted2)">'
+          + 'Grupos monitorados: ' + (j.monitorados.conferidos - faltaM.length) + '/' + j.monitorados.conferidos
+          + ' — quem <b>lê</b> é sempre a conta principal, então isto não afeta o disparo. '
+          + 'Só importa se um dia esta conta virar a principal.</div>';
+    cfgContaFb(html);
+  } catch (e) {
+    cfgContaFb('Não consegui conferir: ' + cfgEsc(e.message), '#ff9a9d');
+  }
+}
+
 function cfgRenderContas() {
   var atual = (CFG_CDV.envio && CFG_CDV.envio.conta) || '';
   var html = '<option value="">Principal</option>';
@@ -4731,7 +4887,8 @@ function cfgRenderContas() {
     html += '<option value="' + cfgEsc(atual) + '" selected>' + cfgEsc(atual) + ' (não pareada)</option>';
   }
   document.getElementById('cfg-conta').innerHTML = html;
-  document.getElementById('cfg-conta').onchange = cfgSujo;
+  document.getElementById('cfg-conta').onchange = function() { cfgRenderStatusConta(); cfgSujo(); };
+  cfgRenderStatusConta();
 }
 
 function cfgSujo() {
