@@ -107,6 +107,16 @@ body[data-tema="light"] .camp-passo.ok .camp-num{background:#16a34a;border-color
 .camp-bloco-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .camp-mini{background:var(--surface);border:1px solid var(--border2);color:var(--muted);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:var(--font)}
 .camp-mini:hover{background:var(--border);color:var(--text)}
+.cfg-linha{display:flex;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--border);border-radius:9px;margin-bottom:7px;background:var(--surface)}
+.cfg-linha.off{opacity:.5}
+.cfg-nome{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cfg-jid{font-size:10.5px;color:var(--muted2);font-family:'Courier New',monospace}
+.cfg-admin{border:1px solid var(--border);border-radius:9px;padding:11px;margin-bottom:9px;background:var(--surface)}
+.cfg-admin-campos{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end}
+.cfg-papeis{display:flex;gap:12px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--muted)}
+.cfg-papeis label{display:flex;gap:5px;align-items:center;cursor:pointer}
+.cfg-ajuda{font-size:11.5px;color:var(--muted2);line-height:1.6;margin:0 0 12px}
+@media(max-width:640px){.cfg-admin-campos{grid-template-columns:1fr}}
 .camp-tab{width:100%;border-collapse:collapse;font-size:12px}
 .camp-tab th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2);font-weight:800;padding:6px 8px;border-bottom:1px solid var(--border)}
 .camp-tab td{padding:7px 8px;border-bottom:1px solid var(--border);color:var(--text)}
@@ -294,6 +304,7 @@ body[data-tema="light"] textarea.out{color:var(--text)}
   <button class="main-tab" id="tab-enviadas">✅ Enviadas hoje</button>
   <button class="main-tab" id="tab-ofertas">📡 Aprovar Ofertas<span class="alerta-badge" id="ofertas-badge" style="display:none">0</span></button>
   <button class="main-tab" id="tab-campanha">📣 Campanha</button>
+  <button class="main-tab" id="tab-config">⚙️ Config</button>
 </div>
 
 <!-- ══ PAINEL OFERTA ══ -->
@@ -710,6 +721,65 @@ body[data-tema="light"] textarea.out{color:var(--text)}
   </div>
 </div>
 
+<!-- ══ PAINEL CONFIG ══ -->
+<div class="main-panel" id="panel-config">
+  <div class="card">
+    <p class="badge-hint">⚙️ Operação CDV</p>
+    <p class="cfg-ajuda">
+      O que antes era fixo no código do servidor. Vale na próxima leitura, sem redeploy.
+      As regras de <b>extração</b> por grupo (mínimo de datas, só-imagem, executiva, texto estruturado)
+      continuam no código — grupo cadastrado aqui e sem regra própria entra no fluxo padrão.
+    </p>
+    <div id="cfg-carregando" style="font-size:12.5px;color:var(--muted)">Carregando configuração…</div>
+
+    <div id="cfg-app" style="display:none">
+      <div class="camp-sec">Grupos de destino</div>
+      <div class="field" style="margin-bottom:10px">
+        <label>Ofertas <span style="color:var(--muted2);font-weight:400">— aba Oferta e aprovações do radar</span></label>
+        <select id="cfg-g-ofertas"></select>
+      </div>
+      <div class="field" style="margin-bottom:10px">
+        <label>Emissão <span style="color:var(--muted2);font-weight:400">— aba Emissão</span></label>
+        <select id="cfg-g-emissao"></select>
+      </div>
+      <div class="field" style="margin-bottom:6px">
+        <label>Avisos operacionais <span style="color:var(--muted2);font-weight:400">— opcional</span></label>
+        <select id="cfg-g-operador"></select>
+      </div>
+      <p class="cfg-ajuda">Grupo interno do CDV para falhas de envio. Vazio: os avisos vão só para os admins com o papel Avisos.</p>
+
+      <div class="camp-sec">Grupos monitorados</div>
+      <p class="cfg-ajuda">De onde o radar de milhas captura. Desligar é reversível — o cadastro fica.</p>
+      <div id="cfg-monitorados"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
+        <div class="field" style="flex:1">
+          <label>Adicionar grupo</label>
+          <select id="cfg-mon-novo"></select>
+        </div>
+        <button class="camp-mini" style="padding:10px 14px" onclick="cfgAddMonitorado()">+ Adicionar</button>
+      </div>
+
+      <div class="camp-sec">Administradores</div>
+      <p class="cfg-ajuda">
+        <b>Telefone</b> só é usado pelo papel Avisos. <b>E-mail</b> registra quem pode aprovar, disparar e mexer nesta
+        tela — mas o gerador ainda não tem login, então hoje isso organiza a operação e não tranca nada.
+      </p>
+      <div id="cfg-admins"></div>
+      <button class="camp-mini" style="padding:10px 14px;margin-top:4px" onclick="cfgAddAdmin()">+ Adicionar admin</button>
+
+      <div class="camp-sec">Quem dispara</div>
+      <div class="field">
+        <label>Conta de WhatsApp do CDV</label>
+        <select id="cfg-conta"></select>
+      </div>
+      <p class="cfg-ajuda">Conta indisponível na hora do envio cai na principal: a mensagem sair pelo número errado é menos grave do que não sair.</p>
+
+      <button class="btn btn-blue" style="margin-top:14px" onclick="cfgSalvar()">💾 Salvar configuração</button>
+      <div id="cfg-fb" style="font-size:12.5px;margin-top:10px;text-align:center"></div>
+    </div>
+  </div>
+</div>
+
 </div>
 <script>
 // ══ CONSTANTES ══
@@ -860,7 +930,7 @@ document.getElementById('logo-img').src = "data:image/png;base64,/9j/4AAQSkZJRgA
 
 // ══ TABS ══
 function switchMain(name) {
-  ['oferta','milhas','alertas','enviadas','ofertas','campanha'].forEach(function(id) {
+  ['oferta','milhas','alertas','enviadas','ofertas','campanha','config'].forEach(function(id) {
     document.getElementById('tab-'+id).classList.toggle('active', id===name);
     document.getElementById('panel-'+id).classList.toggle('active', id===name);
   });
@@ -868,6 +938,7 @@ function switchMain(name) {
   if (name === 'enviadas') carregarEnviadasHoje();
   if (name === 'ofertas') carregarOfertasPendentes();
   if (name === 'campanha') campAoAbrir();
+  if (name === 'config') cfgCarregar();
 }
 
 function setMode(m) {
@@ -4446,6 +4517,263 @@ function campImportar() {
   campFb('camp-salvar-fb', novos.length + ' contato(s) importado(s) — clique em Salvar campanha.', true);
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// ABA CONFIG — operação do CDV (GET/POST /config-cdv no baileys-server)
+// Espelho da gestão por tela que o painel do TSP já tinha. O estado vive nesta
+// variável enquanto a aba está aberta e só vai para o servidor no Salvar: um
+// POST por edição de checkbox faria a lista inteira ir e voltar a cada clique.
+// ════════════════════════════════════════════════════════════════════════════
+var CFG_CDV = null;      // { grupos, monitorados, admins, envio }
+var CFG_NOMES = {};      // jid -> nome atual do grupo, direto do WhatsApp
+var CFG_CONTAS = [];
+var CFG_PAPEIS = ['config','aprovar','disparar','avisos'];
+var CFG_PAPEL_ROTULO = { config:'Config', aprovar:'Aprovar', disparar:'Disparar', avisos:'Avisos' };
+
+function cfgEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Nome do grupo: o do WhatsApp manda, porque grupo renomeado deixaria o rótulo
+// gravado no cadastro velho para sempre. Sem nome nenhum, mostra o JID curto.
+function cfgNomeDe(jid, guardado) {
+  return CFG_NOMES[jid] || guardado || String(jid || '').split('@')[0];
+}
+
+async function cfgCarregar() {
+  var carregando = document.getElementById('cfg-carregando');
+  var app = document.getElementById('cfg-app');
+  if (CFG_CDV) return;   // já carregado nesta sessão da aba
+  carregando.style.display = 'block';
+  carregando.textContent = 'Carregando configuração…';
+  app.style.display = 'none';
+  try {
+    var r = await fetch(SERVER + '/config-cdv?t=' + Date.now(),
+                        { cache:'no-cache', signal:AbortSignal.timeout(15000) });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.erro || 'resposta inválida');
+    CFG_CDV = j.config;
+    CFG_NOMES = j.nomes || {};
+    CFG_CONTAS = j.contas || [];
+    if (Array.isArray(j.papeis) && j.papeis.length) CFG_PAPEIS = j.papeis;
+    cfgRender();
+    carregando.style.display = 'none';
+    app.style.display = 'block';
+  } catch (e) {
+    carregando.innerHTML = '<span style="color:#ff9a9d">Não consegui carregar: ' + cfgEsc(e.message) +
+      '</span> <button class="camp-mini" onclick="CFG_CDV=null;cfgCarregar()">Tentar de novo</button>';
+  }
+}
+
+function cfgRender() {
+  cfgRenderSelectsGrupo();
+  cfgRenderMonitorados();
+  cfgRenderAdmins();
+  cfgRenderContas();
+}
+
+// Opções em ordem alfabética pelo nome — sem exceção, como no resto do
+// ecossistema. O JID em uso entra na lista mesmo se o nome for desconhecido:
+// senão o select abriria vazio e o Salvar apagaria o destino real.
+function cfgOpcoesGrupo(selecionado, comVazio) {
+  var vistos = {};
+  var itens = [];
+  Object.keys(CFG_NOMES).forEach(function(jid) {
+    vistos[jid] = 1;
+    itens.push({ jid: jid, nome: CFG_NOMES[jid] });
+  });
+  if (selecionado && !vistos[selecionado]) {
+    itens.push({ jid: selecionado, nome: cfgNomeDe(selecionado) + ' (fora da lista)' });
+  }
+  itens.sort(function(a,b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+  var html = comVazio ? '<option value="">— nenhum —</option>' : '';
+  itens.forEach(function(it) {
+    html += '<option value="' + cfgEsc(it.jid) + '"' + (it.jid === selecionado ? ' selected' : '') + '>'
+          + cfgEsc(it.nome) + '</option>';
+  });
+  return html;
+}
+
+function cfgRenderSelectsGrupo() {
+  document.getElementById('cfg-g-ofertas').innerHTML  = cfgOpcoesGrupo(CFG_CDV.grupos.ofertas, false);
+  document.getElementById('cfg-g-emissao').innerHTML  = cfgOpcoesGrupo(CFG_CDV.grupos.emissao, false);
+  document.getElementById('cfg-g-operador').innerHTML = cfgOpcoesGrupo(CFG_CDV.grupos.operador, true);
+}
+
+function cfgRenderMonitorados() {
+  var lista = CFG_CDV.monitorados || [];
+  var alvo = document.getElementById('cfg-monitorados');
+  if (!lista.length) {
+    alvo.innerHTML = '<p class="cfg-ajuda">Nenhum grupo cadastrado — o radar de milhas não está capturando nada.</p>';
+  } else {
+    var ativos = lista.filter(function(m){ return m.ativo !== false; }).length;
+    var html = '<p class="cfg-ajuda">' + ativos + ' de ' + lista.length + ' ligado(s).</p>';
+    lista.forEach(function(m, i) {
+      var on = m.ativo !== false;
+      html += '<div class="cfg-linha' + (on ? '' : ' off') + '">'
+            + '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="cfgToggleMonitorado(' + i + ',this.checked)"/>'
+            + '<div style="flex:1;min-width:0">'
+            +   '<div class="cfg-nome">' + cfgEsc(cfgNomeDe(m.jid, m.nome)) + '</div>'
+            +   '<div class="cfg-jid">' + cfgEsc(m.jid) + '</div>'
+            + '</div>'
+            + '<button class="camp-mini" style="color:#ff9a9d" onclick="cfgRemoverMonitorado(' + i + ')" title="Remover do cadastro">🗑️</button>'
+            + '</div>';
+    });
+    alvo.innerHTML = html;
+  }
+  // O seletor de adicionar só oferece grupo que ainda não está cadastrado.
+  var jaTem = {};
+  lista.forEach(function(m){ jaTem[m.jid] = 1; });
+  var opcoes = Object.keys(CFG_NOMES)
+    .filter(function(jid){ return !jaTem[jid]; })
+    .map(function(jid){ return { jid: jid, nome: CFG_NOMES[jid] }; })
+    .sort(function(a,b){ return a.nome.localeCompare(b.nome, 'pt-BR'); });
+  var sel = document.getElementById('cfg-mon-novo');
+  sel.innerHTML = opcoes.length
+    ? opcoes.map(function(o){ return '<option value="' + cfgEsc(o.jid) + '">' + cfgEsc(o.nome) + '</option>'; }).join('')
+    : '<option value="">— todos os grupos conhecidos já estão na lista —</option>';
+}
+
+function cfgToggleMonitorado(i, on) {
+  CFG_CDV.monitorados[i].ativo = !!on;
+  cfgRenderMonitorados();
+  cfgSujo();
+}
+
+function cfgRemoverMonitorado(i) {
+  var m = CFG_CDV.monitorados[i];
+  if (!confirm('Remover "' + cfgNomeDe(m.jid, m.nome) + '" do cadastro?\n\nPara apenas parar de capturar, desmarque a caixa: o cadastro fica e dá para religar depois.')) return;
+  CFG_CDV.monitorados.splice(i, 1);
+  cfgRenderMonitorados();
+  cfgSujo();
+}
+
+function cfgAddMonitorado() {
+  var jid = document.getElementById('cfg-mon-novo').value;
+  if (!jid) return;
+  CFG_CDV.monitorados.push({ jid: jid, nome: CFG_NOMES[jid] || '', ativo: true });
+  cfgRenderMonitorados();
+  cfgSujo();
+}
+
+function cfgRenderAdmins() {
+  var lista = CFG_CDV.admins || [];
+  var alvo = document.getElementById('cfg-admins');
+  if (!lista.length) {
+    alvo.innerHTML = '<p class="cfg-ajuda">Nenhum admin cadastrado.</p>';
+    return;
+  }
+  var html = '';
+  lista.forEach(function(a, i) {
+    html += '<div class="cfg-admin">'
+          + '<div class="cfg-admin-campos">'
+          +   '<div class="field"><label>Nome</label><input type="text" value="' + cfgEsc(a.nome) + '" oninput="cfgAdminCampo(' + i + ',\'nome\',this.value)"/></div>'
+          +   '<div class="field"><label>Telefone</label><input type="text" value="' + cfgEsc(a.telefone) + '" placeholder="5531999999999" oninput="cfgAdminCampo(' + i + ',\'telefone\',this.value)"/></div>'
+          +   '<div class="field"><label>E-mail</label><input type="email" value="' + cfgEsc(a.email) + '" oninput="cfgAdminCampo(' + i + ',\'email\',this.value)"/></div>'
+          +   '<button class="camp-mini" style="color:#ff9a9d;padding:10px 12px" onclick="cfgRemoverAdmin(' + i + ')" title="Remover admin">🗑️</button>'
+          + '</div>'
+          + '<div class="cfg-papeis">';
+    CFG_PAPEIS.forEach(function(p) {
+      var marcado = (a.papeis || []).indexOf(p) >= 0;
+      html += '<label><input type="checkbox" ' + (marcado ? 'checked' : '')
+            + ' onchange="cfgAdminPapel(' + i + ',\'' + p + '\',this.checked)"/>'
+            + cfgEsc(CFG_PAPEL_ROTULO[p] || p) + '</label>';
+    });
+    html += '</div></div>';
+  });
+  alvo.innerHTML = html;
+}
+
+// Campo a campo, sem re-render: redesenhar a lista a cada tecla faria o input
+// perder o foco no meio da digitação.
+function cfgAdminCampo(i, campo, valor) {
+  CFG_CDV.admins[i][campo] = valor;
+  cfgSujo();
+}
+
+function cfgAdminPapel(i, papel, on) {
+  var a = CFG_CDV.admins[i];
+  if (!Array.isArray(a.papeis)) a.papeis = [];
+  var pos = a.papeis.indexOf(papel);
+  if (on && pos < 0) a.papeis.push(papel);
+  if (!on && pos >= 0) a.papeis.splice(pos, 1);
+  cfgSujo();
+}
+
+function cfgAddAdmin() {
+  if (!Array.isArray(CFG_CDV.admins)) CFG_CDV.admins = [];
+  CFG_CDV.admins.push({ nome:'', telefone:'', email:'', papeis:[] });
+  cfgRenderAdmins();
+  cfgSujo();
+}
+
+function cfgRemoverAdmin(i) {
+  var a = CFG_CDV.admins[i];
+  if (!confirm('Remover ' + (a.nome || a.email || a.telefone || 'este admin') + '?')) return;
+  CFG_CDV.admins.splice(i, 1);
+  cfgRenderAdmins();
+  cfgSujo();
+}
+
+function cfgRenderContas() {
+  var atual = (CFG_CDV.envio && CFG_CDV.envio.conta) || '';
+  var html = '<option value="">Principal</option>';
+  CFG_CONTAS.slice()
+    .sort(function(a,b){ return String(a.id).localeCompare(String(b.id), 'pt-BR'); })
+    .forEach(function(ct) {
+      html += '<option value="' + cfgEsc(ct.id) + '"' + (ct.id === atual ? ' selected' : '') + '>'
+            + cfgEsc(ct.id) + (ct.conectado ? ' (conectada)' : ' (desconectada)') + '</option>';
+    });
+  // Conta gravada que não está mais pareada: aparece assim mesmo, senão o
+  // Salvar a trocaria pela principal sem ninguém pedir.
+  if (atual && !CFG_CONTAS.some(function(ct){ return ct.id === atual; })) {
+    html += '<option value="' + cfgEsc(atual) + '" selected>' + cfgEsc(atual) + ' (não pareada)</option>';
+  }
+  document.getElementById('cfg-conta').innerHTML = html;
+  document.getElementById('cfg-conta').onchange = cfgSujo;
+}
+
+function cfgSujo() {
+  var fb = document.getElementById('cfg-fb');
+  fb.style.color = 'var(--muted2)';
+  fb.textContent = 'Alterações não salvas.';
+}
+
+async function cfgSalvar() {
+  var fb = document.getElementById('cfg-fb');
+  var body = {
+    grupos: {
+      ofertas:  document.getElementById('cfg-g-ofertas').value,
+      emissao:  document.getElementById('cfg-g-emissao').value,
+      operador: document.getElementById('cfg-g-operador').value,
+    },
+    monitorados: CFG_CDV.monitorados,
+    admins: CFG_CDV.admins,
+    envio: { conta: document.getElementById('cfg-conta').value },
+  };
+  if (body.grupos.ofertas && body.grupos.ofertas === body.grupos.emissao) {
+    if (!confirm('Ofertas e Emissão vão para o MESMO grupo. Confirma?')) return;
+  }
+  fb.style.color = 'var(--muted)';
+  fb.textContent = 'Salvando…';
+  try {
+    var r = await fetch(SERVER + '/config-cdv', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body), signal: AbortSignal.timeout(20000),
+    });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.erro || 'falha ao salvar');
+    CFG_CDV = j.config;
+    cfgRender();
+    fb.style.color = 'var(--green, #3ddc84)';
+    fb.textContent = '✓ Configuração salva.';
+  } catch (e) {
+    fb.style.color = '#ff9a9d';
+    fb.textContent = 'Não salvou: ' + e.message;
+  }
+}
+
 // ══ TEMA ══
 function aplicarTema(t) {
   document.body.setAttribute('data-tema', t);
@@ -4469,6 +4797,7 @@ window.addEventListener('DOMContentLoaded', function() {
   document.getElementById('tab-enviadas').addEventListener('click', function(){ switchMain('enviadas'); });
   document.getElementById('tab-ofertas').addEventListener('click', function(){ switchMain('ofertas'); });
   document.getElementById('tab-campanha').addEventListener('click', function(){ switchMain('campanha'); });
+  document.getElementById('tab-config').addEventListener('click', function(){ switchMain('config'); });
   var cfgCorpo = document.getElementById('camp-cfg-corpo');
   ['input','change'].forEach(function(ev){ cfgCorpo.addEventListener(ev, function(){ campSujo(); }); });
   document.getElementById('mt-link').addEventListener('click',   function(){ setMode('link'); });
