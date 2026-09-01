@@ -495,6 +495,16 @@ body[data-tema="light"] textarea.out{color:var(--text)}
     <span class="spin">⏳</span>
     <span id="alertas-buffer-txt">0 item(s) aguardando janela de 3 min...</span>
   </div>
+  <div id="alertas-buffer-det" style="display:none;font-size:12px;color:var(--muted2);margin:-6px 0 12px 4px"></div>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <button class="btn" style="background:#3f3f3f;color:#aaa;font-size:12px;padding:7px 14px"
+      onclick="alternarDescartes()">🚫 <span id="descartes-btn-txt">Ver descartes</span></button>
+  </div>
+  <div id="descartes-wrap" style="display:none;margin-bottom:16px">
+    <div class="alerta-sep">Descartados antes da fila</div>
+    <div id="descartes-resumo" style="font-size:12px;color:var(--muted2);margin:6px 0 10px"></div>
+    <div id="descartes-lista"></div>
+  </div>
   <div id="alertas-lista"></div>
   <div id="alertas-processados-wrap" style="display:none">
     <div class="alerta-sep">Processados recentemente</div>
@@ -2101,10 +2111,26 @@ function renderAlertas(data) {
   var bufferBar = document.getElementById('alertas-buffer-bar');
   var bufferTxt = document.getElementById('alertas-buffer-txt');
   var emBuffer = data.bufferAtivo || 0;
+  var janela = data.janelaMin || 3;
+  var det = document.getElementById('alertas-buffer-det');
   if (emBuffer > 0) {
     bufferBar.style.display = 'flex';
-    bufferTxt.textContent = emBuffer + ' item(s) aguardando janela de 3 min...';
-  } else { bufferBar.style.display = 'none'; }
+    // A janela é debounce: cada mensagem nova no grupo reinicia a contagem.
+    // Dizer só "aguardando 3 min" faz parecer travado quando o grupo está em
+    // rajada e a espera real é maior.
+    bufferTxt.textContent = emBuffer + ' item(s) na janela de ' + janela
+      + ' min — cada mensagem nova no grupo reinicia a contagem.';
+    var linhas = (data.buffer || []).map(function(b){
+      var falta = b.fechaEm ? Math.max(0, Math.round((new Date(b.fechaEm) - Date.now()) / 1000)) : null;
+      return '• <b>' + esc(b.grupo || b.jid.split('@')[0]) + '</b> — ' + b.itens + ' item(s)'
+        + (falta !== null ? ', processa em ~' + falta + 's' : '');
+    });
+    det.innerHTML = linhas.join('<br>');
+    det.style.display = linhas.length ? 'block' : 'none';
+  } else {
+    bufferBar.style.display = 'none';
+    det.style.display = 'none';
+  }
 
   var ofertas = (data.ofertas || []).filter(ehAlertaGerador);
   var pendentes = ofertas.filter(function(o){ return o.status === 'pendente'; });
@@ -2127,7 +2153,59 @@ function renderAlertas(data) {
 
   if (emBuffer > 0) {
     if (alertasTimer) clearTimeout(alertasTimer);
-    alertasTimer = setTimeout(carregarAlertas, 30000);
+    // Com janela aberta a tela mostra contagem regressiva: 30s de intervalo
+    // deixaria o número quase sempre desatualizado.
+    alertasTimer = setTimeout(carregarAlertas, 10000);
+  }
+}
+
+/* ══════ DESCARTES ══════ */
+// O que chegou, foi processado e não virou item na fila. Sem esta lista, um
+// alerta cortado pelo filtro de preço e um alerta que a IA não reconheceu são
+// indistinguíveis de "não chegou" — e os três pedem ações diferentes.
+var descartesAbertos = false;
+
+function alternarDescartes() {
+  descartesAbertos = !descartesAbertos;
+  document.getElementById('descartes-wrap').style.display = descartesAbertos ? 'block' : 'none';
+  document.getElementById('descartes-btn-txt').textContent = descartesAbertos ? 'Ocultar descartes' : 'Ver descartes';
+  if (descartesAbertos) carregarDescartes();
+}
+
+async function carregarDescartes() {
+  var lista = document.getElementById('descartes-lista');
+  var resumo = document.getElementById('descartes-resumo');
+  lista.innerHTML = '<div class="alerta-empty">Carregando...</div>';
+  try {
+    var r = await fetch(SERVER + '/cdv/descartes?limite=60&t=' + Date.now(), { signal: AbortSignal.timeout(15000) });
+    var d = await r.json();
+    if (!d.ok) throw new Error(d.erro || 'falhou');
+    var chaves = Object.keys(d.porMotivo || {});
+    resumo.innerHTML = d.total
+      ? chaves.map(function(k){ return '<b>' + esc(k) + '</b>: ' + d.porMotivo[k]; }).join(' &nbsp;·&nbsp; ')
+        + ' &nbsp;·&nbsp; <span style="color:var(--muted2)">registro em memória, zera a cada reinício do servidor</span>'
+      : '';
+    if (!d.itens.length) {
+      lista.innerHTML = '<div class="alerta-empty">Nenhum descarte registrado.<br>'
+        + '<span style="font-size:12px;color:var(--muted2)">Tudo que chegou virou item na fila.</span></div>';
+      return;
+    }
+    lista.innerHTML = d.itens.map(function(x){
+      var quando = new Date(x.em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      var rota = (x.origem || '?') + ' → ' + (x.destino || '?');
+      return '<div style="border:1px solid var(--linha);border-radius:10px;padding:11px 13px;margin-bottom:8px">'
+        + '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:5px">'
+          + '<b style="font-size:13px">' + esc(rota) + (x.pontos ? ' · ' + x.pontos.toLocaleString('pt-BR') + ' pts' : '') + '</b>'
+          + '<span style="font-size:11px;color:var(--muted2)">' + quando + ' · ' + esc(x.grupo || x.jid || '—') + '</span>'
+        + '</div>'
+        + '<div style="font-size:12px;color:#f59e0b;margin-bottom:4px">' + esc(x.motivo)
+          + (x.detalhe ? ' <span style="color:var(--muted2)">— ' + esc(x.detalhe) + '</span>' : '') + '</div>'
+        + (x.trecho ? '<div style="font-size:11px;color:var(--muted2);line-height:1.5">' + esc(x.trecho) + '…</div>' : '')
+      + '</div>';
+    }).join('');
+  } catch(e) {
+    lista.innerHTML = '<div class="alerta-empty">Não foi possível carregar os descartes.<br>'
+      + '<span style="font-size:12px;color:var(--muted2)">' + esc(e.message) + '</span></div>';
   }
 }
 
