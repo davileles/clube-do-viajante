@@ -107,6 +107,9 @@ body[data-tema="light"] .camp-passo.ok .camp-num{background:#16a34a;border-color
 .camp-bloco-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .camp-mini{background:var(--surface);border:1px solid var(--border2);color:var(--muted);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:var(--font)}
 .camp-mini:hover{background:var(--border);color:var(--text)}
+select[multiple]{background-image:none;padding:6px;cursor:default;height:auto}
+select[multiple] option{padding:7px 9px;border-radius:7px;font-weight:500}
+select[multiple] option:checked{background:var(--accent,#4a8dff);color:#fff}
 .cfg-linha{display:flex;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--border);border-radius:9px;margin-bottom:7px;background:var(--surface)}
 .cfg-linha.off{opacity:.5}
 .cfg-nome{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -768,12 +771,15 @@ body[data-tema="light"] textarea.out{color:var(--text)}
       <div class="camp-sec">Grupos monitorados</div>
       <p class="cfg-ajuda">De onde o radar de milhas captura. Desligar é reversível — o cadastro fica.</p>
       <div id="cfg-monitorados"></div>
-      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
-        <div class="field" style="flex:1">
-          <label>Adicionar grupo</label>
-          <select id="cfg-mon-novo"></select>
-        </div>
-        <button class="camp-mini" style="padding:10px 14px" onclick="cfgAddMonitorado()">+ Adicionar</button>
+      <div class="field" style="margin-top:10px">
+        <label>Adicionar grupos <span style="color:var(--muted2);font-weight:400">— Ctrl/Cmd ou Shift para escolher vários</span></label>
+        <input id="cfg-mon-busca" type="text" placeholder="Filtrar por nome ou JID…" oninput="cfgRenderMonNovo()" style="margin-bottom:6px"/>
+        <select id="cfg-mon-novo" multiple size="8" onchange="cfgMonSelInfo()"></select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+        <button class="camp-mini" style="padding:10px 14px" onclick="cfgAddMonitorado()">+ Adicionar selecionados</button>
+        <button class="camp-mini" style="padding:10px 14px" onclick="cfgMonSelTodos()">Selecionar todos os filtrados</button>
+        <span id="cfg-mon-sel" style="font-size:12px;color:var(--muted2)"></span>
       </div>
 
       <div class="camp-sec">Administradores</div>
@@ -4759,17 +4765,63 @@ function cfgRenderMonitorados() {
     });
     alvo.innerHTML = html;
   }
-  // O seletor de adicionar só oferece grupo que ainda não está cadastrado.
+  cfgRenderMonNovo();
+}
+
+// Seletor de adicionar: multiplo e filtravel. So oferece grupo que ainda nao
+// esta cadastrado. O filtro existe porque a conta leitora enxerga centenas de
+// grupos — rolar tudo para achar dez era o que tornava a adicao um a um pior
+// ainda. Repintar zera a selecao de proposito: manter marcado um item que o
+// filtro escondeu adicionaria grupo que o operador nao esta vendo.
+function cfgRenderMonNovo() {
+  var sel = document.getElementById('cfg-mon-novo');
+  if (!sel) return;
   var jaTem = {};
-  lista.forEach(function(m){ jaTem[m.jid] = 1; });
+  (CFG_CDV.monitorados || []).forEach(function(m){ jaTem[m.jid] = 1; });
+  var termo = (document.getElementById('cfg-mon-busca') || {}).value || '';
+  termo = termo.trim().toLowerCase();
   var opcoes = Object.keys(CFG_NOMES)
     .filter(function(jid){ return !jaTem[jid]; })
-    .map(function(jid){ return { jid: jid, nome: CFG_NOMES[jid] }; })
+    .map(function(jid){ return { jid: jid, nome: CFG_NOMES[jid] || jid }; })
+    .filter(function(o){
+      if (!termo) return true;
+      return o.nome.toLowerCase().indexOf(termo) >= 0 || o.jid.toLowerCase().indexOf(termo) >= 0;
+    })
     .sort(function(a,b){ return a.nome.localeCompare(b.nome, 'pt-BR'); });
+  if (!opcoes.length) {
+    sel.innerHTML = '<option value="" disabled>'
+      + (termo ? '— nenhum grupo com \u201C' + cfgEsc(termo) + '\u201D —'
+               : '— todos os grupos conhecidos já estão na lista —')
+      + '</option>';
+  } else {
+    sel.innerHTML = opcoes.map(function(o){
+      return '<option value="' + cfgEsc(o.jid) + '" title="' + cfgEsc(o.jid) + '">' + cfgEsc(o.nome) + '</option>';
+    }).join('');
+  }
+  cfgMonSelInfo();
+}
+
+function cfgMonSelecionados() {
   var sel = document.getElementById('cfg-mon-novo');
-  sel.innerHTML = opcoes.length
-    ? opcoes.map(function(o){ return '<option value="' + cfgEsc(o.jid) + '">' + cfgEsc(o.nome) + '</option>'; }).join('')
-    : '<option value="">— todos os grupos conhecidos já estão na lista —</option>';
+  if (!sel) return [];
+  return Array.prototype.slice.call(sel.selectedOptions || [])
+    .map(function(o){ return o.value; })
+    .filter(function(v){ return !!v; });
+}
+
+function cfgMonSelInfo(msg) {
+  var alvo = document.getElementById('cfg-mon-sel');
+  if (!alvo) return;
+  if (msg) { alvo.textContent = msg; return; }
+  var n = cfgMonSelecionados().length;
+  alvo.textContent = n ? n + ' selecionado(s)' : '';
+}
+
+function cfgMonSelTodos() {
+  var sel = document.getElementById('cfg-mon-novo');
+  if (!sel) return;
+  Array.prototype.slice.call(sel.options).forEach(function(o){ if (o.value) o.selected = true; });
+  cfgMonSelInfo();
 }
 
 function cfgToggleMonitorado(i, on) {
@@ -4787,11 +4839,23 @@ function cfgRemoverMonitorado(i) {
 }
 
 function cfgAddMonitorado() {
-  var jid = document.getElementById('cfg-mon-novo').value;
-  if (!jid) return;
-  CFG_CDV.monitorados.push({ jid: jid, nome: CFG_NOMES[jid] || '', ativo: true });
+  var escolhidos = cfgMonSelecionados();
+  if (!escolhidos.length) { cfgMonSelInfo('Escolha ao menos um grupo na lista acima.'); return; }
+  // Guarda contra duplicata mesmo o seletor ja filtrando os cadastrados: entre
+  // um render e o clique a lista pode ter mudado, e grupo repetido em
+  // monitorados vira captura processada duas vezes.
+  var jaTem = {};
+  (CFG_CDV.monitorados || []).forEach(function(m){ jaTem[m.jid] = 1; });
+  var novos = 0;
+  escolhidos.forEach(function(jid){
+    if (jaTem[jid]) return;
+    jaTem[jid] = 1;
+    CFG_CDV.monitorados.push({ jid: jid, nome: CFG_NOMES[jid] || '', ativo: true });
+    novos++;
+  });
   cfgRenderMonitorados();
-  cfgSujo();
+  cfgMonSelInfo(novos ? novos + ' grupo(s) adicionado(s) — falta Salvar.' : 'Nenhum grupo novo: já estavam na lista.');
+  if (novos) cfgSujo();
 }
 
 function cfgRenderAdmins() {
