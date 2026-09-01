@@ -767,6 +767,27 @@ body[data-tema="light"] textarea.out{color:var(--text)}
       <div id="cfg-admins"></div>
       <button class="camp-mini" style="padding:10px 14px;margin-top:4px" onclick="cfgAddAdmin()">+ Adicionar admin</button>
 
+      <div class="camp-sec">Quem lê</div>
+      <p class="cfg-ajuda">
+        O número que fica <b>dentro</b> dos grupos e recebe as mensagens. É o mais crítico dos três:
+        se ele cair, o radar para de capturar. As duas operações escolhem do mesmo conjunto de números pareados —
+        apontar as duas para o mesmo é o comportamento de sempre.
+      </p>
+      <div class="field" style="margin-bottom:10px">
+        <label>Grupos de passagem (CDV)</label>
+        <select id="cfg-leitor-cdv"></select>
+      </div>
+      <div class="field" style="margin-bottom:10px">
+        <label>Grupos-fonte do Tica (TSP)</label>
+        <select id="cfg-leitor-tsp"></select>
+      </div>
+      <div id="cfg-leitores-estado" style="font-size:12px;margin-bottom:6px"></div>
+      <p class="cfg-ajuda">
+        Leitora fora do ar devolve a leitura para a principal automaticamente — grupo cego perde oferta para sempre,
+        e ser lido pelo número “errado” não muda nada do que chega ao assinante. Se ela ficar <b>conectada mas muda</b>,
+        a principal não assume: nesse caso entra um alerta na tela e no WhatsApp dos admins.
+      </p>
+
       <div class="camp-sec">Quem dispara</div>
       <p class="cfg-ajuda">
         Este é o número <b>que envia</b> — o único que precisa estar pareado por QR e dentro dos grupos de destino.
@@ -4548,6 +4569,8 @@ function campImportar() {
 var CFG_CDV = null;      // { grupos, monitorados, admins, envio }
 var CFG_NOMES = {};      // jid -> nome atual do grupo, direto do WhatsApp
 var CFG_CONTAS = [];
+var CFG_LEITURA_TSP = '';   // leitora do TSP — mora no config_tsp, escolhida aqui
+var CFG_LEITORES = [];      // estado efetivo das duas leituras, vindo do servidor
 var CFG_PAPEIS = ['config','aprovar','disparar','avisos'];
 var CFG_PAPEL_ROTULO = { config:'Config', aprovar:'Aprovar', disparar:'Disparar', avisos:'Avisos' };
 
@@ -4577,6 +4600,8 @@ async function cfgCarregar() {
     CFG_CDV = j.config;
     CFG_NOMES = j.nomes || {};
     CFG_CONTAS = j.contas || [];
+    CFG_LEITURA_TSP = j.leituraTsp || '';
+    CFG_LEITORES = j.leitores || [];
     if (Array.isArray(j.papeis) && j.papeis.length) CFG_PAPEIS = j.papeis;
     cfgRender();
     carregando.style.display = 'none';
@@ -4592,6 +4617,7 @@ function cfgRender() {
   cfgRenderMonitorados();
   cfgRenderAdmins();
   cfgRenderContas();
+  cfgRenderLeitores();
 }
 
 // Opções em ordem alfabética pelo nome — sem exceção, como no resto do
@@ -4784,6 +4810,7 @@ async function cfgRecarregarContas() {
     if (!j.ok) throw new Error(j.erro || 'resposta inválida');
     CFG_CONTAS = j.extras || [];
     cfgRenderContas();
+    cfgRenderLeitores();
     var principalOk = j.principal && j.principal.conectado;
     cfgContaFb('Principal: ' + (principalOk ? '<b style="color:#3ddc84">conectada</b>' : '<b style="color:#ff9a9d">desconectada</b>')
              + ' · ' + CFG_CONTAS.length + ' conta(s) secundária(s).');
@@ -4872,8 +4899,9 @@ async function cfgConferirConta() {
   }
 }
 
-function cfgRenderContas() {
-  var atual = (CFG_CDV.envio && CFG_CDV.envio.conta) || '';
+// Opções do pool de contas, em ordem alfabética. Usado pelos três selects —
+// as duas leitoras e a de disparo escolhem da MESMA lista de números pareados.
+function cfgOpcoesConta(atual) {
   var html = '<option value="">Principal</option>';
   CFG_CONTAS.slice()
     .sort(function(a,b){ return String(a.id).localeCompare(String(b.id), 'pt-BR'); })
@@ -4886,7 +4914,41 @@ function cfgRenderContas() {
   if (atual && !CFG_CONTAS.some(function(ct){ return ct.id === atual; })) {
     html += '<option value="' + cfgEsc(atual) + '" selected>' + cfgEsc(atual) + ' (não pareada)</option>';
   }
-  document.getElementById('cfg-conta').innerHTML = html;
+  return html;
+}
+
+// A diferença entre CONFIGURADA e EFETIVA é o que explica "troquei a conta e
+// nada mudou": leitora caída devolve a leitura para a principal em silêncio.
+function cfgRenderLeitores() {
+  var leitorCdv = (CFG_CDV.leitura && CFG_CDV.leitura.conta) || '';
+  document.getElementById('cfg-leitor-cdv').innerHTML = cfgOpcoesConta(leitorCdv);
+  document.getElementById('cfg-leitor-tsp').innerHTML = cfgOpcoesConta(CFG_LEITURA_TSP);
+  document.getElementById('cfg-leitor-cdv').onchange = cfgSujo;
+  document.getElementById('cfg-leitor-tsp').onchange = cfgSujo;
+
+  var alvo = document.getElementById('cfg-leitores-estado');
+  if (!CFG_LEITORES.length) { alvo.innerHTML = ''; return; }
+  var html = '';
+  CFG_LEITORES.forEach(function(l) {
+    var rotulo = l.operacao === 'cdv' ? 'Passagens' : 'Tica';
+    if (l.configurada !== l.efetiva) {
+      html += '<div style="color:#ffb454">⚠️ ' + rotulo + ': configurado “' + cfgEsc(l.configurada)
+            + '”, mas quem está lendo agora é “' + cfgEsc(l.efetiva) + '” (a conta configurada não está conectada).</div>';
+    } else {
+      html += '<div style="color:var(--muted2)">' + rotulo + ': lendo por “' + cfgEsc(l.efetiva) + '”'
+            + (l.conectada ? '' : ' <span style="color:#ff9a9d">(desconectada)</span>') + '.</div>';
+    }
+  });
+  var mesmos = CFG_LEITORES.length === 2 && CFG_LEITORES[0].efetiva === CFG_LEITORES[1].efetiva;
+  if (mesmos) {
+    html += '<div style="color:var(--muted2);margin-top:4px">Um número só lê as duas operações — como sempre funcionou.</div>';
+  }
+  alvo.innerHTML = html;
+}
+
+function cfgRenderContas() {
+  var atual = (CFG_CDV.envio && CFG_CDV.envio.conta) || '';
+  document.getElementById('cfg-conta').innerHTML = cfgOpcoesConta(atual);
   document.getElementById('cfg-conta').onchange = function() { cfgRenderStatusConta(); cfgSujo(); };
   cfgRenderStatusConta();
 }
@@ -4907,10 +4969,27 @@ async function cfgSalvar() {
     },
     monitorados: CFG_CDV.monitorados,
     admins: CFG_CDV.admins,
-    envio: { conta: document.getElementById('cfg-conta').value },
+    envio:   { conta: document.getElementById('cfg-conta').value },
+    leitura: { conta: document.getElementById('cfg-leitor-cdv').value },
+    // Mora no config_tsp, mas é escolhida aqui: decidir quem lê o quê exige
+    // ver os dois lados na mesma tela.
+    leituraTsp: document.getElementById('cfg-leitor-tsp').value,
   };
   if (body.grupos.ofertas && body.grupos.ofertas === body.grupos.emissao) {
     if (!confirm('Ofertas e Emissão vão para o MESMO grupo. Confirma?')) return;
+  }
+  // Separar a leitura só funciona se o número novo já estiver DENTRO dos grupos.
+  // Sem isso ele não recebe nada, e como se declara conectado, a principal não
+  // reassume: os grupos ficam cegos até alguém notar.
+  var leitorAntes = (CFG_CDV.leitura && CFG_CDV.leitura.conta) || '';
+  if (body.leitura.conta !== leitorAntes && body.leitura.conta) {
+    if (!confirm('Passar a leitura dos grupos de passagem para “' + body.leitura.conta + '”.\n\n'
+      + 'Esse número precisa já estar DENTRO dos grupos monitorados — senão eles ficam sem captura.\n\n'
+      + 'Confirma?')) return;
+  }
+  if (body.leituraTsp !== CFG_LEITURA_TSP && body.leituraTsp) {
+    if (!confirm('Passar a leitura dos grupos-fonte do Tica para “' + body.leituraTsp + '”.\n\n'
+      + 'Esse número precisa já estar DENTRO dos grupos-fonte do radar.\n\nConfirma?')) return;
   }
   fb.style.color = 'var(--muted)';
   fb.textContent = 'Salvando…';
@@ -4922,6 +5001,7 @@ async function cfgSalvar() {
     var j = await r.json();
     if (!j.ok) throw new Error(j.erro || 'falha ao salvar');
     CFG_CDV = j.config;
+    CFG_LEITURA_TSP = body.leituraTsp || '';
     cfgRender();
     fb.style.color = 'var(--green, #3ddc84)';
     fb.textContent = '✓ Configuração salva.';
