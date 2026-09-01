@@ -116,6 +116,13 @@ body[data-tema="light"] .camp-passo.ok .camp-num{background:#16a34a;border-color
 .cfg-papeis{display:flex;gap:12px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--muted)}
 .cfg-papeis label{display:flex;gap:5px;align-items:center;cursor:pointer}
 .cfg-ajuda{font-size:11.5px;color:var(--muted2);line-height:1.6;margin:0 0 12px}
+.cfg-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;border-radius:5px;padding:2px 7px;margin:2px 4px 0 0;border:1px solid}
+.cfg-tag.base{background:rgba(18,110,255,.12);color:var(--blue);border-color:rgba(18,110,255,.3)}
+.cfg-tag.le{background:rgba(61,220,132,.12);color:#3ddc84;border-color:rgba(61,220,132,.3)}
+.cfg-tag.envia{background:rgba(255,180,84,.12);color:#ffb454;border-color:rgba(255,180,84,.3)}
+.cfg-tag.alerta{background:rgba(255,154,157,.12);color:#ff9a9d;border-color:rgba(255,154,157,.35)}
+.cfg-tag.livre{background:transparent;color:var(--muted2);border-color:var(--border2)}
+.cfg-num-status{font-size:10.5px;font-weight:700}
 @media(max-width:640px){.cfg-admin-campos{grid-template-columns:1fr}}
 .camp-tab{width:100%;border-collapse:collapse;font-size:12px}
 .camp-tab th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2);font-weight:800;padding:6px 8px;border-bottom:1px solid var(--border)}
@@ -766,6 +773,12 @@ body[data-tema="light"] textarea.out{color:var(--text)}
       </p>
       <div id="cfg-admins"></div>
       <button class="camp-mini" style="padding:10px 14px;margin-top:4px" onclick="cfgAddAdmin()">+ Adicionar admin</button>
+
+      <div class="camp-sec">Números conectados</div>
+      <p class="cfg-ajuda">
+        Todos os números pareados, com o que cada um faz. Os seletores abaixo escolhem desta mesma lista.
+      </p>
+      <div id="cfg-numeros"></div>
 
       <div class="camp-sec">Quem lê</div>
       <p class="cfg-ajuda">
@@ -4602,6 +4615,7 @@ async function cfgCarregar() {
     CFG_CONTAS = j.contas || [];
     CFG_LEITURA_TSP = j.leituraTsp || '';
     CFG_LEITORES = j.leitores || [];
+    CFG_PRINCIPAL = j.principal || null;
     if (Array.isArray(j.papeis) && j.papeis.length) CFG_PAPEIS = j.papeis;
     cfgRender();
     carregando.style.display = 'none';
@@ -4618,6 +4632,7 @@ function cfgRender() {
   cfgRenderAdmins();
   cfgRenderContas();
   cfgRenderLeitores();
+  cfgRenderNumeros();
 }
 
 // Opções em ordem alfabética pelo nome — sem exceção, como no resto do
@@ -4809,8 +4824,10 @@ async function cfgRecarregarContas() {
     var j = await r.json();
     if (!j.ok) throw new Error(j.erro || 'resposta inválida');
     CFG_CONTAS = j.extras || [];
+    CFG_PRINCIPAL = j.principal || null;
     cfgRenderContas();
     cfgRenderLeitores();
+    cfgRenderNumeros();
     var principalOk = j.principal && j.principal.conectado;
     cfgContaFb('Principal: ' + (principalOk ? '<b style="color:#3ddc84">conectada</b>' : '<b style="color:#ff9a9d">desconectada</b>')
              + ' · ' + CFG_CONTAS.length + ' conta(s) secundária(s).');
@@ -4902,7 +4919,7 @@ async function cfgConferirConta() {
 // Opções do pool de contas, em ordem alfabética. Usado pelos três selects —
 // as duas leitoras e a de disparo escolhem da MESMA lista de números pareados.
 function cfgOpcoesConta(atual) {
-  var html = '<option value="">Principal</option>';
+  var html = '<option value="">Principal (base do sistema)</option>';
   CFG_CONTAS.slice()
     .sort(function(a,b){ return String(a.id).localeCompare(String(b.id), 'pt-BR'); })
     .forEach(function(ct) {
@@ -4919,6 +4936,71 @@ function cfgOpcoesConta(atual) {
 
 // A diferença entre CONFIGURADA e EFETIVA é o que explica "troquei a conta e
 // nada mudou": leitora caída devolve a leitura para a principal em silêncio.
+// Pool inteiro numa lista só, com os papéis de cada número. É o modelo mental
+// certo para quem opera: não existe hierarquia entre os números, existe função.
+// A "principal" carrega uma etiqueta a mais porque sustenta o resto do sistema
+// (resolução de JID, bot, campanha, autocura) — mas escolhe papéis como as outras.
+var CFG_PRINCIPAL = null;
+
+function cfgPapeisDoNumero(id) {
+  var tags = [];
+  if (id === 'principal') {
+    tags.push({ txt:'Base do sistema', cls:'base',
+                dica:'Resolve números, responde o bot e a campanha, e assume a leitura de quem cair.' });
+  }
+  CFG_LEITORES.forEach(function(l) {
+    var rotulo = l.operacao === 'cdv' ? 'Lê passagens (CDV)' : 'Lê fontes do Tica';
+    if (l.efetiva === id) {
+      var assumido = l.configurada !== l.efetiva;
+      tags.push({ txt: rotulo + (assumido ? ' — assumido' : ''), cls:'le',
+                  dica: assumido ? 'Assumiu porque a conta configurada não está conectada.' : '' });
+    } else if (l.configurada === id) {
+      var alvo = l.operacao === 'cdv' ? 'as passagens' : 'as fontes do Tica';
+      tags.push({ txt:'Deveria ler ' + alvo + ' — fora do ar', cls:'alerta',
+                  dica:'Escolhido para esta leitura, mas não está conectado. A base do sistema assumiu.' });
+    }
+  });
+  var envio = (CFG_CDV.envio && CFG_CDV.envio.conta) || 'principal';
+  if (envio === id || (id === 'principal' && !envio)) {
+    tags.push({ txt:'Dispara o CDV', cls:'envia', dica:'' });
+  }
+  if (!tags.length) tags.push({ txt:'Sem papel', cls:'livre', dica:'Pareado, mas não lê nem envia nada.' });
+  return tags;
+}
+
+function cfgRenderNumeros() {
+  var alvo = document.getElementById('cfg-numeros');
+  var linhas = [];
+  linhas.push({ id:'principal',
+                conectado: CFG_PRINCIPAL ? !!CFG_PRINCIPAL.conectado : null });
+  CFG_CONTAS.slice()
+    .sort(function(a,b){ return String(a.id).localeCompare(String(b.id), 'pt-BR'); })
+    .forEach(function(ct){ linhas.push({ id: ct.id, conectado: !!ct.conectado }); });
+
+  var html = '';
+  linhas.forEach(function(n) {
+    var st = n.conectado === null
+      ? '<span class="cfg-num-status" style="color:var(--muted2)">—</span>'
+      : (n.conectado
+          ? '<span class="cfg-num-status" style="color:#3ddc84">● conectado</span>'
+          : '<span class="cfg-num-status" style="color:#ff9a9d">● fora do ar</span>');
+    var tags = cfgPapeisDoNumero(n.id).map(function(t) {
+      return '<span class="cfg-tag ' + t.cls + '"' + (t.dica ? ' title="' + cfgEsc(t.dica) + '"' : '') + '>'
+           + cfgEsc(t.txt) + '</span>';
+    }).join('');
+    html += '<div class="cfg-linha' + (n.conectado === false ? ' off' : '') + '" style="align-items:flex-start">'
+          + '<div style="flex:1;min-width:0">'
+          +   '<div class="cfg-nome">' + cfgEsc(n.id) + ' &nbsp;' + st + '</div>'
+          +   '<div style="margin-top:4px">' + tags + '</div>'
+          + '</div>'
+          + '</div>';
+  });
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+        + '<button class="camp-mini" onclick="cfgRecarregarContas()">↻ Atualizar status</button>'
+        + '</div>';
+  alvo.innerHTML = html;
+}
+
 function cfgRenderLeitores() {
   var leitorCdv = (CFG_CDV.leitura && CFG_CDV.leitura.conta) || '';
   document.getElementById('cfg-leitor-cdv').innerHTML = cfgOpcoesConta(leitorCdv);
