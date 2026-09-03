@@ -881,6 +881,14 @@ var PROGRAMAS_CPM = {
 // reverta esta linha para 'https://ir.clubedoviajante.com.br/' -- nada mais
 // precisa mudar, o guard de host abaixo se ajusta sozinho.
 var IR_BASE = 'https://cdv-proxy-production.up.railway.app/ir/';
+// DESLIGADO (03/09/2026): enquanto ir.clubedoviajante.com.br nao estiver
+// cadastrado como custom domain no Railway, as ofertas saem com o link ORIGINAL,
+// exatamente como veio da fonte -- sem /ir, sem ?o=, sem params de afiliado.
+// Motivo: o dominio nativo do proxy aparecendo cru na mensagem do grupo.
+// Para reativar a mascara basta voltar IR_ATIVO para true -- nada mais muda.
+// Obs: linkPrograma (aba Emissao) NAO depende deste flag, pois ali nao existe
+// URL de origem para usar como fallback.
+var IR_ATIVO = false;
 // Host do IR_BASE vigente, para nao mascarar duas vezes uma URL ja mascarada.
 var IR_HOST = (function(){ try { return new URL(IR_BASE).hostname.toLowerCase(); } catch(e) { return ''; } })();
 var PROGRAMAS_SLUG = {
@@ -923,6 +931,7 @@ var PATH_SLUG = {
 
 function afiliarLink(url, origem) {
   if (!url) return url;
+  if (!IR_ATIVO) return url;   // mascara desligada: devolve o link original da oferta
   var u;
   try { u = new URL(String(url).trim()); } catch(e) { return url; }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return url;
