@@ -1879,10 +1879,35 @@ function blocoHistorico(dados) {
   return minLinha + '\n\n📈 *MÉDIA 180 DIAS*: ' + fmt(h.media) + ' pts';
 }
 
+// Marca que entra no título quando a emissão bate o mínimo dos últimos 180 dias.
+var TITULO_MIN_SUFIXO = ' - bateu o mínimo histórico!';
+
+// Destaca a primeira linha (o título em negrito) da mensagem: 🔥 na frente e a
+// chamada no fim. Idempotente — mensagem já marcada (alerta que chegou do
+// baileys-server já destacado, ou re-render do card) volta intacta.
+function destacarTituloMinimo(msg) {
+  var linhas = String(msg == null ? '' : msg).split('\n');
+  var i = 0;
+  while (i < linhas.length && !linhas[i].trim()) i++;
+  if (i >= linhas.length) return msg;
+  var t = linhas[i];
+  if (t.indexOf('🔥') !== -1 || t.indexOf(TITULO_MIN_SUFIXO) !== -1) return msg;
+  var m = t.match(/^\*(.+)\*\s*$/);
+  linhas[i] = m ? '*🔥 ' + m[1] + TITULO_MIN_SUFIXO + '*'
+                : '🔥 ' + t + TITULO_MIN_SUFIXO;
+  return linhas.join('\n');
+}
+
 // insere o bloco logo abaixo da CIA e acima do LINK (fallback: após o título)
 function inserirBlocoHistorico(msg, dados) {
   var bloco = blocoHistorico(dados);
   if (!bloco) return msg;
+  // Mesmo criterio do bloco (atual <= minimo da janela): se bateu, o titulo
+  // ganha destaque. Vale para a aba Emissao e para a aba Alertas, porque as
+  // duas passam por aqui.
+  var _h = calcularHistoricoRota(dados);
+  var _atual = Number(dados.pontos) || 0;
+  if (_h && _atual > 0 && _atual <= _h.menor) msg = destacarTituloMinimo(msg);
   // Evita duplicação: se o bloco já está na mensagem, não insere novamente
   if (msg.indexOf('🏆 *MÍN. 180 DIAS*') !== -1) return msg;
   var marc = msg.indexOf('🔗 *LINK*');
